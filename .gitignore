@@ -1,0 +1,20 @@
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment — NEVER commit these
+.env
+local.settings.json
+
+# Data files (contain submission data)
+python-service/data/submissions.json
+
+# OS
+.DS_Store
+Thumbs.db
