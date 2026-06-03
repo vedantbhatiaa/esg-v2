@@ -1,28 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import './animations.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --navy:  #0E1117;
-  --dss:   #E31E24;
-  --green: #16A34A;
-  --amber: #F59E0B;
-  --blue:  #0891B2;
+  --navy:   #0A2240;
+  --green:  #16A34A;
+  --red:    #E31E24;
+  --border: #E2E8F0;
+  --muted:  #64748B;
+  --text:   #0F172A;
+  --bg:     #F4F5F7;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; }
 
-html, body, #app {
-  height: 100%;
-  font-family: "DM Sans", sans-serif;
-  background: #F4F6FB;
-  color: #0F172A;
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-thumb { background: #E8ECF4; border-radius: 2px; }
+/* Scrollbar */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 
-/* transitions */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to       { opacity: 0; }
+/* Page entry animation */
+.tip-fade-in { animation: tipFadeIn 350ms ease-out both; }

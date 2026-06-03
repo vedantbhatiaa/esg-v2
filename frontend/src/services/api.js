@@ -1,45 +1,45 @@
-/**
- * api.js — All HTTP calls to the backend.
- * Vite proxies /api → Node.js (port 3001) → Python Functions (port 7071).
- */
-import axios from "axios";
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
-const http = axios.create({
-  baseURL: "/api",
-  timeout: 20000,
-  headers: { "Content-Type": "application/json" },
-});
+async function _fetch(path, opts = {}) {
+  const res = await fetch(BASE + path, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+  return json
+}
 
-// ── Auth interceptor (add token when available) ────────────────────────────
-http.interceptors.request.use((config) => {
-  const raw = localStorage.getItem("esg_user");
-  if (raw) {
-    const user = JSON.parse(raw);
-    config.headers["X-User-Id"]      = user.company_id || "dss";
-    config.headers["X-User-Role"]    = user.role;
-  }
-  return config;
-});
+const api = {
+  // Auth
+  login:           (email, password)     => _fetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-// ── Companies ──────────────────────────────────────────────────────────────
-export const getCompanies = (year) =>
-  http.get("/companies", { params: { year } }).then((r) => r.data);
+  // Home
+  getHomeData:     (company, year)       => _fetch(`/home?company=${encodeURIComponent(company)}&year=${year}`),
 
-// ── Submissions ────────────────────────────────────────────────────────────
-export const submitData = (payload) =>
-  http.post("/submissions", payload).then((r) => r.data);
+  // My Records
+  getMyRecords:    (company, year)       => _fetch(`/records?company=${encodeURIComponent(company)}&year=${year}`),
 
-export const calculateKPI = (formData) =>
-  http.post("/submissions/calculate", formData).then((r) => r.data);
+  // Analytics / Dashboard
+  getAnalytics:    (params)              => _fetch('/analytics?' + new URLSearchParams(params)),
 
-// ── Analytics ──────────────────────────────────────────────────────────────
-export const getAnalytics = (params = {}) =>
-  http.get("/analytics", { params }).then((r) => r.data);
+  // Benchmarks
+  getBenchmarks:   (params)              => _fetch('/benchmarks?' + new URLSearchParams(params)),
 
-// ── Benchmarks ─────────────────────────────────────────────────────────────
-export const getBenchmarks = (year, companyId = null) =>
-  http.get("/benchmarks", { params: { year, company_id: companyId } }).then((r) => r.data);
+  // Reports
+  getReports:      (company, year)       => _fetch(`/reports?company=${encodeURIComponent(company)}&year=${year}`),
 
-// ── Health ─────────────────────────────────────────────────────────────────
-export const healthCheck = () =>
-  http.get("/health").then((r) => r.data);
+  // Submit Data
+  submitData:      (body)                => _fetch('/submissions', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Companies
+  getCompanies:    ()                    => _fetch('/companies'),
+
+  // Verification (DSS+)
+  getVerificationQueue: ()               => _fetch('/verification'),
+  setVerificationStatus: (body)          => _fetch('/verification', { method: 'POST', body: JSON.stringify(body) }),
+}
+
+export default api
+export const { login, getHomeData, getMyRecords, getAnalytics, getBenchmarks,
+               getReports, submitData, getCompanies } = api

@@ -1,74 +1,93 @@
 <template>
-  <aside class="w-52 bg-navy flex flex-col flex-shrink-0 overflow-hidden">
-    <!-- Logo -->
-    <div class="px-4 pt-4 pb-3 border-b border-white/5">
-      <div class="flex items-baseline gap-0.5">
-        <span class="font-head text-xl font-black text-dss tracking-tight">dss</span>
-        <span class="font-head text-sm font-semibold text-[#9B9B9B]">+</span>
-      </div>
-      <div class="text-[9px] text-white/20 mt-0.5 uppercase tracking-widest">ESG Reporting · TIP</div>
+  <aside class="w-44 bg-[#0A2240] flex flex-col flex-shrink-0 h-full">
+    <!-- Brand -->
+    <div class="px-4 py-4 border-b border-[#1a3560]">
+      <div class="text-white font-black text-[15px]">TIP ESG Platform</div>
+      <div class="text-[10px] text-[#64748B] mt-0.5">dss+ · Tire Industry Project</div>
     </div>
 
-    <!-- User chip -->
-    <div class="mx-3 mt-2 mb-1 px-3 py-2 bg-white/[0.04] border border-white/[0.06] rounded-lg">
-      <div class="text-xs font-semibold text-white/85">{{ auth.displayName }}</div>
-      <div class="text-[10px] text-white/30 mt-0.5">
-        {{ auth.role === 'dss' ? 'dss+ Analyst' : auth.companyName + ' · 2023' }}
-      </div>
+    <!-- Company chip -->
+    <div class="mx-3 mt-3 mb-1 bg-[#1a3560] rounded-lg px-3 py-2">
+      <div class="text-[9px] text-[#64748B] uppercase tracking-wider mb-0.5">YOUR COMPANY</div>
+      <div class="text-[12px] font-semibold text-white truncate">{{ auth.companyName }}</div>
     </div>
 
-    <!-- Navigation -->
-    <nav class="px-2 pt-1 flex-1">
-      <template v-for="item in navItems" :key="item.name">
-        <router-link
-          :to="item.path"
-          class="flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] text-white/40 rounded-lg
-                 border-l-[2.5px] border-transparent hover:bg-white/5 hover:text-white/75
-                 transition-all duration-150 mb-0.5 no-underline"
-          active-class="!bg-dss/10 !text-white !border-dss font-medium"
-        >
-          <span class="w-1 h-1 rounded-full bg-current opacity-50 flex-shrink-0"></span>
-          {{ item.name }}
-        </router-link>
+    <!-- Nav items -->
+    <nav class="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+      <!-- Client nav -->
+      <template v-if="auth.isClient">
+        <NavItem v-for="item in CLIENT_NAV" :key="item.to" v-bind="item" />
+      </template>
+
+      <!-- DSS+ nav -->
+      <template v-if="auth.isDss">
+        <NavItem v-for="item in DSS_NAV" :key="item.to" v-bind="item" />
       </template>
     </nav>
 
-    <!-- Footer -->
-    <div class="px-4 py-3 border-t border-white/5">
-      <button
-        @click="auth.logout(); $router.push('/login')"
-        class="text-[11px] text-white/20 underline hover:text-white/50 transition-colors"
-      >
-        Sign out
-      </button>
+    <!-- User info -->
+    <div class="border-t border-[#1a3560] px-4 py-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-[#16A34A] flex items-center justify-center
+                    text-white text-[11px] font-bold">
+          {{ initial }}
+        </div>
+        <div>
+          <div class="text-[11px] font-semibold text-white">{{ auth.companyName?.split(' ')[0] }}</div>
+          <div class="text-[9px] text-[#64748B]">{{ auth.isDss ? 'dss+ Analyst' : `Client · ${auth.companyName}` }}</div>
+        </div>
+      </div>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { useAuthStore } from "@/stores/auth.js";
+import { computed }     from 'vue'
+import { useRoute }     from 'vue-router'
+import { useAuthStore } from '@/stores/auth.js'
 
-const auth = useAuthStore();
+const auth  = useAuthStore()
+const route = useRoute()
+
+const initial = computed(() => auth.companyName?.[0] || 'U')
 
 const CLIENT_NAV = [
-  { name: "Dashboard",    path: "/dashboard" },
-  { name: "Submit Data",  path: "/entry" },
-  { name: "Analysis",     path: "/analysis" },
-  { name: "Benchmarking", path: "/benchmarking" },
-  { name: "Reports",      path: "/reports" },
-];
+  { to: '/home',       label: 'Home' },
+  { to: '/dashboard',  label: 'My Dashboard' },
+  { to: '/my-records', label: 'My Records' },
+  { to: '/benchmarks', label: 'Benchmarks' },
+  { to: '/reports',    label: 'Reports' },
+  { to: '/entry',      label: 'Submit Data' },
+  { to: '/settings',   label: 'Settings' },
+]
 
 const DSS_NAV = [
-  { name: "Portfolio",          path: "/dashboard" },
-  { name: "Data Entry Review",  path: "/entry" },
-  { name: "Analytics",          path: "/analysis" },
-  { name: "Benchmarking",       path: "/benchmarking" },
-  { name: "Reports",            path: "/reports" },
-  { name: "Admin",              path: "/admin" },
-];
+  { to: '/portfolio',    label: 'Portfolio' },
+  { to: '/company-data', label: 'Company Data' },
+  { to: '/verification', label: 'Verification Queue' },
+  { to: '/analysis',     label: 'Analysis' },
+  { to: '/benchmarks',   label: 'Benchmarks' },
+  { to: '/reports',      label: 'Sector Reports' },
+  { to: '/admin',        label: 'Admin' },
+  { to: '/settings',     label: 'Settings' },
+]
+</script>
 
-const navItems = computed(() =>
-  auth.role === "dss" ? DSS_NAV : CLIENT_NAV
-);
+<!-- NavItem as local sub-component -->
+<script>
+import { defineComponent, h }  from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
+
+export const NavItem = defineComponent({
+  props: { to: String, label: String },
+  setup(props) {
+    const route = useRoute()
+    return () => h(RouterLink, { to: props.to, class: [
+      'flex items-center px-3 py-2 rounded-lg text-[12px] font-medium transition-colors w-full',
+      route.path === props.to || route.path.startsWith(props.to + '/')
+        ? 'bg-[#1a3560] text-white'
+        : 'text-[#94A3B8] hover:text-white hover:bg-[#142a50]',
+    ] }, () => props.label)
+  }
+})
 </script>

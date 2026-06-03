@@ -1,172 +1,293 @@
 """
-ESG Data Loader
-Reads from CSV files (same source as original Streamlit app).
-When Azure SQL is ready, swap out the CSV reads here — nothing else changes.
+ESG Data Loader — reads from the SAME master CSV as the Streamlit app.
+All paths resolve relative to the python-service root so both apps share
+the same data files on disk.
 """
-
-import os
-import json
-import csv
+import os, json, glob, csv
+from pathlib import Path
 from datetime import datetime
 
-# Path to your existing data files
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
-SUBMISSIONS_FILE = os.path.join(DATA_DIR, "submissions.json")
-COMPANIES_FILE   = os.path.join(DATA_DIR, "companies.json")
+# ── Paths ─────────────────────────────────────────────────────────────────────
+_HERE     = Path(__file__).parent.parent          # python-service/
+_DATA_DIR = _HERE.parent / "data_storage"         # data_storage/ next to python-service/
+_MASTER_GLOB = str(_DATA_DIR / "master" / "ESG_MASTER_WIDE_ALL_COMPANIES_*.csv")
+_VERIF_CSV   = _DATA_DIR / "verifications.csv"
+
+# Hard-coded demo companies (10 TIP members)
+_COMPANIES = [
+    {"id": "verdatyres",   "name": "VerdaTyres Corp",  "email": "verdatyres@tip-reporting.com",  "role": "client"},
+    {"id": "alphatread",   "name": "AlphaTread Ltd",   "email": "alphatread@tip-reporting.com",  "role": "client"},
+    {"id": "betarubber",   "name": "BetaRubber Inc",   "email": "betarubber@tip-reporting.com",  "role": "client"},
+    {"id": "gammatire",    "name": "GammaTire SA",     "email": "gammatire@tip-reporting.com",   "role": "client"},
+    {"id": "deltagrip",    "name": "DeltaGrip GmbH",  "email": "deltagrip@tip-reporting.com",   "role": "client"},
+    {"id": "epsilonwheel", "name": "EpsilonWheel Co",  "email": "epsilonwheel@tip-reporting.com","role": "client"},
+    {"id": "zetatrac",     "name": "ZetaTrac LLC",     "email": "zetatrac@tip-reporting.com",    "role": "client"},
+    {"id": "etaroad",      "name": "EtaRoad AG",       "email": "etaroad@tip-reporting.com",     "role": "client"},
+    {"id": "thetadrive",   "name": "ThetaDrive NV",    "email": "thetadrive@tip-reporting.com",  "role": "client"},
+    {"id": "iotawheel",    "name": "IotaTire PLC",     "email": "iotawheel@tip-reporting.com",   "role": "client"},
+    {"id": "dss_analyst",  "name": "dss+ Analyst",     "email": "employee@consultdss.com",       "role": "dss"},
+]
+
+# ── Column aliases — maps CSV column names to canonical field names ────────────
+_COL_MAP = {
+    "Production":                          "production",
+    "Water withdrawals (m3)":              "water_withdrawals",
+    "Renewable electricity purchased (GJ)":"renew_elec_purchased",
+    "Non-renewable electricity purchased": "nonrenew_elec_purchased",
+    "Self-generated renewable electricity":"self_gen_elec",
+    "Purchased Steam (GJ)":               "purchased_steam",
+    "Sold Electricity (GJ)":              "sold_electricity",
+    "Natural Gas (GJ LHV)":              "nat_gas",
+    "Coal (GJ LHV)":                     "coal_sub",
+    "Diesel (GJ LHV)":                   "diesel",
+    "Biomass (GJ LHV)":                  "biomass",
+    "Total no. of sites":                 "total_sites",
+    "ISO 14001 certified sites":          "iso_sites",
+    "Total amount of waste (T)":          "waste_total",
+    "Amount of waste sent to recovery (T)":"waste_recovery",
+    "CO2 Scope 2 Steam (T.CO2)":         "co2_scope2_steam",
+    # Computed KPI columns (may be pre-computed in the CSV)
+    "Total CO2 - KPI":                    "co2_kpi",
+    "Total energy - KPI":                 "energy_kpi",
+    "Water intake - KPI":                 "water_kpi",
+    "Renewable_Electricity_Share_%":      "renewable_share_pct",
+    "Waste_Recovery_Rate_%":              "waste_recovery_pct",
+    "Total CO2 (T.CO2)":                  "total_co2",
+    "Total Energy (GJ)":                  "total_energy",
+}
 
 
-def _ensure_data_dir():
-    os.makedirs(DATA_DIR, exist_ok=True)
+def _load_master_df():
+    """Load the most-complete master CSV found in data_storage/master/."""
+    files = sorted(glob.glob(_MASTER_GLOB), key=os.path.getmtime, reverse=True)
+    best_rows = []
+    for f in files:
+        try:
+            with open(f, newline="", encoding="utf-8") as fh:
+                rows = list(csv.DictReader(fh))
+            if len(rows) > len(best_rows):
+                best_rows = rows
+        except Exception:
+            pass
+    return best_rows
 
 
-def _load_json(filepath: str, default):
-    if not os.path.exists(filepath):
-        return default
-    with open(filepath, "r") as f:
-        return json.load(f)
+def _row_to_dict(row: dict) -> dict:
+    """Convert CSV row dict → canonical field dict."""
+    out = {"Company": row.get("Company", ""), "Year": _int(row.get("Year"))}
+    for csv_col, field in _COL_MAP.items():
+        if csv_col in row:
+            out[field] = _num(row[csv_col])
+    return out
 
 
-def _save_json(filepath: str, data):
-    _ensure_data_dir()
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2, default=str)
+def _num(v, default=0.0):
+    try: return float(str(v).replace(",", "").strip()) if v not in (None, "", "—") else default
+    except: return default
+
+def _int(v, default=0):
+    try: return int(float(str(v).strip())) if v not in (None, "") else default
+    except: return default
 
 
-# ── Companies ──────────────────────────────────────────────────────────────────
+# ── Public API ─────────────────────────────────────────────────────────────────
 
 def get_all_companies() -> list:
-    """Returns list of all TIP member companies."""
-    return _load_json(COMPANIES_FILE, [
-        {"id": "verdatyres",   "name": "VerdaTyres Corp",  "region": "Europe"},
-        {"id": "alphatread",   "name": "AlphaTread Ltd",   "region": "Europe"},
-        {"id": "betarubber",   "name": "BetaRubber Inc",   "region": "Americas"},
-        {"id": "gammatire",    "name": "GammaTire SA",     "region": "Europe"},
-        {"id": "deltagrip",    "name": "DeltaGrip GmbH",  "region": "Europe"},
-        {"id": "epsilonwheel", "name": "EpsilonWheel Co", "region": "Asia"},
-        {"id": "zetatrac",     "name": "ZetaTrac LLC",    "region": "Americas"},
-        {"id": "etakomp",      "name": "EtaKomp AG",      "region": "Europe"},
-        {"id": "thetarubber",  "name": "ThetaRubber KK",  "region": "Asia"},
-        {"id": "iotawheel",    "name": "IotaWheel Ltd",   "region": "Asia"},
-    ])
+    return _COMPANIES
 
 
-# ── Submissions ────────────────────────────────────────────────────────────────
-
-def get_submissions(company_id: str = None, year: int = None) -> list:
-    """Get all submissions, optionally filtered."""
-    all_subs = _load_json(SUBMISSIONS_FILE, [])
-    if company_id:
-        all_subs = [s for s in all_subs if s.get("company_id") == company_id]
-    if year:
-        all_subs = [s for s in all_subs if s.get("year") == year]
-    return all_subs
-
-
-def get_submission(company_id: str, year: int) -> dict | None:
-    """Get a specific submission."""
-    subs = get_submissions(company_id, year)
-    return subs[0] if subs else None
-
-
-def save_submission(submission: dict) -> dict:
-    """Save or update a submission."""
-    _ensure_data_dir()
-    all_subs = _load_json(SUBMISSIONS_FILE, [])
-
-    # Remove existing submission for same company+year
-    all_subs = [
-        s for s in all_subs
-        if not (s.get("company_id") == submission["company_id"]
-                and s.get("year") == submission["year"])
-    ]
-
-    submission["submitted_at"] = datetime.utcnow().isoformat()
-    all_subs.append(submission)
-    _save_json(SUBMISSIONS_FILE, all_subs)
-    return submission
-
-
-def get_prior_year_kpis(company_id: str, year: int) -> dict | None:
-    """Get KPIs from the previous year for YoY comparison."""
-    prior = get_submission(company_id, year - 1)
-    if prior:
-        return prior.get("kpis", {})
+def get_company(company_name: str) -> dict | None:
+    nl = company_name.lower()
+    for c in _COMPANIES:
+        if c["name"].lower() == nl or c["id"].lower() == nl:
+            return c
     return None
 
 
-# ── Historical series (for charts) ─────────────────────────────────────────────
+def authenticate(email: str, password: str) -> dict | None:
+    """Simple demo auth — password is always 'demo1234'."""
+    email = email.strip().lower()
+    if password != "demo1234":
+        return None
+    for c in _COMPANIES:
+        if c["email"].lower() == email:
+            return c
+    return None
 
-def get_historical_kpi_series(company_id: str, kpi_key: str, years: list = None) -> list:
-    """
-    Returns [{year, value}, ...] for charting.
-    Uses submitted data if available, falls back to CSV baseline data.
-    """
-    all_subs = get_submissions(company_id)
-    sub_map  = {s["year"]: s.get("kpis", {}).get(kpi_key) for s in all_subs}
 
-    if years is None:
-        years = list(range(2009, 2024))
+def get_master_rows(company_name: str = None, year: int = None) -> list:
+    rows = _load_master_df()
+    if company_name:
+        rows = [r for r in rows if r.get("Company", "").strip() == company_name.strip()]
+    if year:
+        rows = [r for r in rows if _int(r.get("Year")) == year]
+    return rows
 
-    # Baseline sector averages (from original app.py data)
-    BASELINE = {
-        "energy_kpi":          [10.8,10.5,10.2,10.0,9.8,9.6,9.5,9.4,9.3,9.2,9.1,9.7,9.7,9.1,8.7],
-        "co2_kpi":             [0.82,0.79,0.76,0.74,0.72,0.71,0.69,0.67,0.66,0.64,0.63,0.60,0.58,0.576,0.551],
-        "renewable_share_pct": [2,2,3,3,4,5,6,7,9,12,16,22,20,31,38.8],
-        "water_kpi":           [7.2,7.0,6.8,6.6,6.5,6.4,6.3,6.2,6.1,6.0,5.9,5.85,5.71,5.73,5.78],
-        "waste_recovery_pct":  [78,79,80,80,81,81,82,82,82,83,83,83,83,85,85.8],
-        "total_co2_t":         [3100000,3000000,2900000,2850000,2800000,2780000,2720000,2650000,2600000,2550000,2500000,2420000,2270000,2060000,2050000],
-        "total_energy_gj":     [26000000,25500000,25000000,24800000,24500000,24200000,24000000,23800000,23500000,23200000,22900000,24500000,24500000,23000000,22000000],
-    }
 
+def get_company_years(company_name: str) -> list:
+    rows = get_master_rows(company_name)
+    return sorted({_int(r["Year"]) for r in rows if r.get("Year")})
+
+
+def get_submission(company_name: str, year: int) -> dict | None:
+    rows = get_master_rows(company_name, year)
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def get_historical_series(company_name: str, year_from: int = 2009, year_to: int = 2025) -> list:
+    """Return list of {year, ...kpis} for all years in range."""
+    from .calculations import calculate_all_kpis, calculate_yoy_change
+    rows = get_master_rows(company_name)
     result = []
-    base_years = list(range(2009, 2024))
-
-    for i, yr in enumerate(years):
-        if yr in sub_map and sub_map[yr] is not None:
-            val = sub_map[yr]
-        elif kpi_key in BASELINE and yr in base_years:
-            idx = base_years.index(yr)
-            val = BASELINE[kpi_key][idx]
-        else:
-            val = None
-        result.append({"year": yr, "value": val})
-
+    prev_kpis = None
+    for row in sorted(rows, key=lambda r: _int(r.get("Year", 0))):
+        yr = _int(row.get("Year", 0))
+        if not (year_from <= yr <= year_to):
+            continue
+        d = _row_to_dict(row)
+        kpis = calculate_all_kpis(d)
+        entry = {"year": yr, **kpis}
+        if prev_kpis:
+            entry["yoy"] = calculate_yoy_change(kpis["co2_kpi"], prev_kpis["co2_kpi"])
+        result.append(entry)
+        prev_kpis = kpis
     return result
 
 
-# ── Benchmarking data ──────────────────────────────────────────────────────────
+def get_sector_series(year_from: int = 2009, year_to: int = 2025) -> list:
+    """Return sector AVERAGE KPIs per year across all companies."""
+    from .calculations import calculate_all_kpis
+    rows = _load_master_df()
+    by_year: dict[int, list] = {}
+    for row in rows:
+        yr = _int(row.get("Year", 0))
+        if year_from <= yr <= year_to:
+            by_year.setdefault(yr, []).append(_row_to_dict(row))
 
-def get_sector_benchmarks(year: int) -> dict:
-    """
-    Returns sector-wide quartile stats for each KPI.
-    In V2 this will be computed from all submissions — for now uses baseline.
-    """
-    return {
-        "year": year,
-        "kpis": {
-            "energy_kpi": {
-                "q25": 7.9, "median": 8.8, "q75": 9.6,
-                "unit": "GJ/T", "lower_is_better": True,
-            },
-            "co2_kpi": {
-                "q25": 0.52, "median": 0.64, "q75": 0.76,
-                "unit": "T.CO2/T", "lower_is_better": True,
-            },
-            "water_kpi": {
-                "q25": 5.20, "median": 5.90, "q75": 6.60,
-                "unit": "m3/T", "lower_is_better": True,
-            },
-            "renewable_share_pct": {
-                "q25": 45, "median": 30, "q75": 18,
-                "unit": "%", "lower_is_better": False,
-            },
-            "iso_certified_pct": {
-                "q25": 100, "median": 88, "q75": 76,
-                "unit": "%", "lower_is_better": False,
-            },
-            "waste_recovery_pct": {
-                "q25": 90, "median": 85.5, "q75": 78,
-                "unit": "%", "lower_is_better": False,
-            },
-        }
+    result = []
+    for yr in sorted(by_year):
+        kpi_lists: dict[str, list] = {}
+        for d in by_year[yr]:
+            kpis = calculate_all_kpis(d)
+            for k, v in kpis.items():
+                kpi_lists.setdefault(k, []).append(v)
+        avg = {k: round(sum(vs) / len(vs), 4) for k, vs in kpi_lists.items() if vs}
+        result.append({"year": yr, "n_companies": len(by_year[yr]), **avg})
+    return result
+
+
+def get_sector_quartiles(year: int) -> dict:
+    """Return Q1/median/Q3 for each KPI for a given year across all companies."""
+    from .calculations import calculate_all_kpis
+    import statistics
+    rows = get_master_rows(year=year)
+    kpi_lists: dict[str, list] = {}
+    for row in rows:
+        d = _row_to_dict(row)
+        kpis = calculate_all_kpis(d)
+        for k, v in kpis.items():
+            if v and v > 0:
+                kpi_lists.setdefault(k, []).append(v)
+
+    result = {}
+    for k, vals in kpi_lists.items():
+        vals_s = sorted(vals)
+        n = len(vals_s)
+        if n >= 3:
+            result[k] = {
+                "q10":    round(vals_s[max(0, int(n * 0.10) - 1)], 4),
+                "q25":    round(vals_s[max(0, int(n * 0.25) - 1)], 4),
+                "median": round(statistics.median(vals_s), 4),
+                "q75":    round(vals_s[min(n-1, int(n * 0.75))], 4),
+                "q90":    round(vals_s[min(n-1, int(n * 0.90))], 4),
+                "min":    round(vals_s[0], 4),
+                "max":    round(vals_s[-1], 4),
+                "n":      n,
+            }
+    return result
+
+
+def save_submission(company_name: str, year: int, data: dict) -> dict:
+    """Save/update a submission row in the master CSV."""
+    from .calculations import calculate_all_kpis
+    from datetime import datetime
+    import pandas as pd
+
+    kpis = calculate_all_kpis(data)
+    master_row = {
+        "Company": company_name, "Year": year,
+        "Production":                           round(data.get("production", 0), 0),
+        "Water withdrawals (m3)":               round(data.get("water_withdrawals", 0), 0),
+        "Renewable electricity purchased (GJ)": round(data.get("renew_elec_purchased", 0), 2),
+        "Non-renewable electricity purchased":  round(data.get("nonrenew_elec_purchased", 0), 2),
+        "Self-generated renewable electricity": round(data.get("self_gen_elec", 0), 2),
+        "Purchased Steam (GJ)":                 round(data.get("purchased_steam", 0), 2),
+        "Natural Gas (GJ LHV)":                round(data.get("nat_gas", 0), 2),
+        "Coal (GJ LHV)":                       round(data.get("coal_sub", 0), 2),
+        "Diesel (GJ LHV)":                     round(data.get("diesel", 0), 2),
+        "Total no. of sites":                  int(data.get("total_sites", 0)),
+        "ISO 14001 certified sites":           int(data.get("iso_sites", 0)),
+        "Total amount of waste (T)":           round(data.get("waste_total", 0), 2),
+        "Amount of waste sent to recovery (T)":round(data.get("waste_recovery", 0), 2),
+        "CO2 Scope 2 Steam (T.CO2)":          round(data.get("co2_scope2_steam", 0), 2),
+        "Total CO2 - KPI":                     kpis["co2_kpi"],
+        "Total energy - KPI":                  kpis["energy_kpi"],
+        "Water intake - KPI":                  kpis["water_kpi"],
+        "Renewable_Electricity_Share_%":       kpis["renewable_share_pct"],
+        "Waste_Recovery_Rate_%":               kpis["waste_recovery_pct"],
+        "Total CO2 (T.CO2)":                   kpis["total_co2_t"],
+        "Total Energy (GJ)":                   kpis["total_energy_gj"],
+        "submitted_at": datetime.utcnow().isoformat(),
     }
+
+    # Find best existing master CSV
+    files = sorted(glob.glob(_MASTER_GLOB), key=os.path.getmtime, reverse=True)
+    if files:
+        df = pd.read_csv(files[0])
+    else:
+        df = pd.DataFrame()
+
+    # Remove old row for same company+year
+    if not df.empty and "Company" in df.columns and "Year" in df.columns:
+        mask = ~((df["Company"] == company_name) & (df["Year"] == year))
+        df   = df[mask]
+
+    new_row = pd.DataFrame([master_row])
+    combined = pd.concat([df, new_row], ignore_index=True).sort_values(["Company","Year"])
+
+    # Save — use year range in filename
+    yr_min = int(combined["Year"].min())
+    yr_max = int(combined["Year"].max())
+    save_path = _DATA_DIR / "master" / f"ESG_MASTER_WIDE_ALL_COMPANIES_{yr_min}_{yr_max}.csv"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(save_path, index=False)
+
+    return {"saved": True, "n_records": len(combined), "kpis": kpis}
+
+
+def get_verification_status(company_name: str, year: int) -> str:
+    """Read DSS+ verification status for a company+year."""
+    if not _VERIF_CSV.exists():
+        return "Pending"
+    with open(_VERIF_CSV, newline="") as f:
+        for row in csv.DictReader(f):
+            if row.get("Company","").strip() == company_name and str(row.get("Year","")).strip() == str(year):
+                return row.get("Status", "Pending")
+    return "Pending"
+
+
+def set_verification_status(company_name: str, year: int, status: str) -> None:
+    """Write DSS+ verification status."""
+    rows = []
+    if _VERIF_CSV.exists():
+        with open(_VERIF_CSV, newline="") as f:
+            for row in csv.DictReader(f):
+                if not (row.get("Company","").strip() == company_name and
+                        str(row.get("Year","")).strip() == str(year)):
+                    rows.append(row)
+    rows.append({"Company": company_name, "Year": str(year), "Status": status,
+                 "UpdatedAt": datetime.utcnow().isoformat()})
+    _VERIF_CSV.parent.mkdir(parents=True, exist_ok=True)
+    with open(_VERIF_CSV, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["Company","Year","Status","UpdatedAt"])
+        w.writeheader(); w.writerows(rows)

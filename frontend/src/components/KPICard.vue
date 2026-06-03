@@ -1,56 +1,41 @@
 <template>
-  <div class="bg-white border border-gray-100 rounded-xl p-4 relative overflow-hidden">
-    <!-- top accent bar -->
-    <div class="absolute top-0 left-0 right-0 h-[3px]" :style="{ background: color }"></div>
-
-    <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{{ label }}</div>
-
-    <div class="font-head text-2xl font-bold text-gray-900 my-1 leading-none">
-      {{ value ?? "—" }}
+  <div class="bg-white border border-[#E2E8F0] rounded-xl p-4 flex flex-col gap-1">
+    <div class="text-[9px] font-bold text-[#94A3B8] uppercase tracking-wider">{{ label }}</div>
+    <div class="text-[24px] font-extrabold leading-none mt-1" :style="{ color }">
+      {{ value ?? '—' }}
+      <span v-if="unit && !String(value||'').includes(unit)"
+        class="text-[12px] font-medium text-[#94A3B8] ml-1">{{ unit }}</span>
     </div>
-
-    <div class="text-[11px] text-gray-400">{{ unit }}</div>
-
-    <!-- YoY delta badge -->
-    <div v-if="delta !== null" class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-lg"
-      :class="deltaClass">
-      {{ deltaArrow }} {{ Math.abs(delta) }}% {{ deltaLabel }}
-    </div>
-
-    <!-- mini sparkline slot -->
-    <div v-if="$slots.chart" class="h-8 mt-2">
-      <slot name="chart" />
+    <div v-if="delta !== null && delta !== undefined" class="flex items-center gap-1 mt-1">
+      <span class="text-[11px] font-semibold px-1.5 py-0.5 rounded"
+        :class="deltaClass">
+        {{ delta > 0 ? '+' : '' }}{{ delta?.toFixed(1) }}%
+      </span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed } from 'vue'
 
 const props = defineProps({
-  label:      { type: String, required: true },
-  value:      { type: [Number, String], default: null },
-  unit:       { type: String, default: "" },
-  delta:      { type: Number, default: null },       // YoY % change
-  deltaLabel: { type: String, default: "YoY" },
-  lowerBetter:{ type: Boolean, default: true },       // whether falling delta is good
-  color:      { type: String, default: "#0891B2" },
-});
+  label:       { type: String,  required: true },
+  value:       { type: [String, Number], default: null },
+  unit:        { type: String,  default: '' },
+  delta:       { type: Number,  default: null },
+  lowerBetter: { type: Boolean, default: true },
+  color:       { type: String,  default: '#0F172A' },
+})
 
-const isGood = computed(() =>
-  props.delta === null ? null :
-  props.lowerBetter ? props.delta < 0 : props.delta > 0
-);
+const isGood = computed(() => {
+  if (props.delta === null || props.delta === undefined) return null
+  return props.lowerBetter ? props.delta <= 0 : props.delta >= 0
+})
 
 const deltaClass = computed(() => {
-  if (isGood.value === null) return "bg-gray-100 text-gray-500";
+  if (isGood.value === null) return 'text-[#64748B] bg-[#F1F5F9]'
   return isGood.value
-    ? "bg-green-50 text-green-700"
-    : "bg-red-50 text-red-600";
-});
-
-const deltaArrow = computed(() => {
-  if (props.delta === null) return "";
-  return props.delta < 0 ? "▼" : props.delta > 0 ? "▲" : "→";
-});
+    ? 'text-[#16A34A] bg-green-50'
+    : 'text-red-500 bg-red-50'
+})
 </script>

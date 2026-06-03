@@ -1,102 +1,108 @@
 <template>
-  <div class="h-full flex items-center justify-center"
-    style="background: linear-gradient(135deg, #080838 0%, #0D0D6B 45%, #1a1a8c 80%, #0a0a50 100%)">
-
-    <div class="bg-[#F0F1F7] rounded-2xl w-[420px] px-10 py-10">
+  <div class="min-h-screen bg-[#1A1A6B] flex items-center justify-center p-4">
+    <div class="bg-[#F4F5F7] rounded-2xl p-8 w-full max-w-sm shadow-2xl">
       <!-- Logo -->
-      <div class="font-head text-3xl font-black tracking-tight mb-1">
-        <span class="text-dss">dss</span><span class="text-[#9B9B9B]">+</span>
-        <span class="text-[#1E3A8A] italic text-2xl font-semibold ml-1">360</span>
-      </div>
-      <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-7">
-        Protect · Transform · Sustain
+      <div class="mb-6">
+        <span class="text-[#E31E24] font-black text-[22px] tracking-tight">dss+</span>
+        <div class="text-[9px] text-[#94A3B8] font-semibold tracking-[0.25em] uppercase mt-0.5">
+          PROTECT · TRANSFORM · SUSTAIN
+        </div>
       </div>
 
       <!-- Role tabs -->
-      <div class="grid grid-cols-2 gap-1.5 bg-gray-200 rounded-lg p-1 mb-5">
-        <button
-          v-for="r in roles" :key="r.value"
-          @click="selectedRole = r.value"
-          class="py-2 rounded-md text-xs font-medium transition-all duration-150"
-          :class="selectedRole === r.value
-            ? 'bg-white text-gray-900 font-semibold shadow-sm'
-            : 'text-gray-400 hover:text-gray-600'"
-        >
+      <div class="flex rounded-lg bg-[#E8E9ED] p-1 gap-1 mb-6">
+        <button v-for="r in ROLES" :key="r.key" @click="switchRole(r.key)"
+          class="flex-1 py-2 rounded-md text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5"
+          :class="role === r.key
+            ? 'bg-white text-[#E31E24] shadow-sm'
+            : 'text-[#94A3B8] hover:text-[#64748B]'">
+          <span v-if="role === r.key" class="w-2 h-2 rounded-full bg-[#E31E24]"></span>
           {{ r.label }}
         </button>
       </div>
 
       <!-- Form -->
-      <label class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Email address</label>
-      <input
-        v-model="email"
-        type="email"
-        :placeholder="selectedRole === 'client' ? 'verdatyres@tip.com' : 'analyst@consultdss.com'"
-        class="w-full h-10 border-[1.5px] border-gray-200 rounded-lg px-3 text-sm mb-3 focus:outline-none focus:border-[#1E3A8A] bg-white"
-        @keyup.enter="handleLogin"
-      />
-      <label class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Password</label>
-      <input
-        v-model="password"
-        type="password"
-        placeholder="Enter password"
-        class="w-full h-10 border-[1.5px] border-gray-200 rounded-lg px-3 text-sm mb-1 focus:outline-none focus:border-[#1E3A8A] bg-white"
-        @keyup.enter="handleLogin"
-      />
+      <form @submit.prevent="handleLogin" class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+            EMAIL ADDRESS
+          </label>
+          <input v-model="email" type="email" required autocomplete="email"
+            class="w-full h-10 px-3 rounded-lg border border-[#D1D5DB] bg-white text-[13px]
+                   text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#E31E24]/20
+                   focus:border-[#E31E24] transition-colors" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+            PASSWORD
+          </label>
+          <div class="relative">
+            <input v-model="password" :type="showPw ? 'text' : 'password'" required
+              class="w-full h-10 px-3 pr-10 rounded-lg border border-[#D1D5DB] bg-white text-[13px]
+                     text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#E31E24]/20
+                     focus:border-[#E31E24] transition-colors" />
+            <button type="button" @click="showPw = !showPw"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#64748B]">
+              {{ showPw ? '🙈' : '👁' }}
+            </button>
+          </div>
+        </div>
 
-      <p v-if="error" class="text-xs text-red-600 mb-2">{{ error }}</p>
+        <p v-if="error" class="text-[11px] text-red-500 text-center">{{ error }}</p>
 
-      <button
-        @click="handleLogin"
-        :disabled="loading"
-        class="w-full h-10 bg-navy text-white rounded-lg text-sm font-semibold font-head mt-3 hover:bg-[#1a1a5a] transition-colors disabled:opacity-50"
-      >
-        {{ loading ? "Signing in…" : "Sign in to workspace" }}
-      </button>
+        <button type="submit" :disabled="loading"
+          class="w-full h-11 bg-[#0A2240] hover:bg-[#1a3560] text-white rounded-lg font-semibold
+                 text-[13px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          {{ loading ? 'Signing in…' : 'Sign in to workspace' }}
+        </button>
+      </form>
 
-      <!-- Demo hint -->
-      <div class="mt-4 text-center text-[11px] text-gray-400 leading-relaxed">
-        <strong>Demo credentials:</strong><br/>
-        Client: verdatyres@tip.com / tip2024<br/>
-        Analyst: analyst@consultdss.com / dss2024
-      </div>
+      <p class="text-center text-[10px] text-[#94A3B8] mt-5">
+        Demo: verdatyres@tip-reporting.com (Client) · employee@consultdss.com (dss+)
+        <br>Password: <strong>demo1234</strong>
+      </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth.js";
+import { ref, watch } from 'vue'
+import { useRouter }    from 'vue-router'
+import { useAuthStore } from '@/stores/auth.js'
 
-const auth     = useAuthStore();
-const router   = useRouter();
-const email    = ref("");
-const password = ref("");
-const error    = ref("");
-const loading  = ref(false);
-const selectedRole = ref("client");
+const auth   = useAuthStore()
+const router = useRouter()
 
-const roles = [
-  { value: "client", label: "TIP Client Company" },
-  { value: "dss",    label: "dss+ Analyst" },
-];
+const ROLES = [
+  { key: 'client', label: 'TIP Client Company' },
+  { key: 'dss',    label: 'dss+ Analyst' },
+]
 
-// Pre-fill email hint when role switches
-watch(selectedRole, (r) => {
-  email.value    = r === "client" ? "verdatyres@tip.com" : "analyst@consultdss.com";
-  password.value = r === "client" ? "tip2024" : "dss2024";
-});
+const EMAILS = { client: 'verdatyres@tip-reporting.com', dss: 'employee@consultdss.com' }
+
+const role     = ref('client')
+const email    = ref(EMAILS.client)
+const password = ref('demo1234')
+const showPw   = ref(false)
+const loading  = ref(false)
+const error    = ref('')
+
+function switchRole(r) {
+  role.value  = r
+  email.value = EMAILS[r]
+  error.value = ''
+}
 
 async function handleLogin() {
-  error.value   = "";
-  loading.value = true;
-  const result  = auth.login(email.value, password.value);
-  loading.value = false;
-  if (result.success) {
-    router.push("/dashboard");
-  } else {
-    error.value = result.error;
+  loading.value = true
+  error.value   = ''
+  try {
+    await auth.login(email.value, password.value)
+    router.push('/home')
+  } catch (e) {
+    error.value = 'Invalid email or password'
+  } finally {
+    loading.value = false
   }
 }
 </script>

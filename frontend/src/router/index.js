@@ -2,63 +2,41 @@ import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "@/stores/auth.js";
 
 const routes = [
-  {
-    path: "/",
-    redirect: "/dashboard",
-  },
-  {
-    path: "/login",
-    name: "Login",
-    component: () => import("@/views/Login.vue"),
-    meta: { public: true },
-  },
-  {
-    path: "/dashboard",
-    name: "Dashboard",
-    component: () => import("@/views/Dashboard.vue"),
-  },
-  {
-    path: "/entry",
-    name: "Entry",
-    component: () => import("@/views/Entry.vue"),
-  },
-  {
-    path: "/analysis",
-    name: "Analysis",
-    component: () => import("@/views/Analysis.vue"),
-  },
-  {
-    path: "/benchmarking",
-    name: "Benchmarking",
-    component: () => import("@/views/Benchmarking.vue"),
-  },
-  {
-    path: "/reports",
-    name: "Reports",
-    component: () => import("@/views/Reports.vue"),
-  },
-  {
-    path: "/admin",
-    name: "Admin",
-    component: () => import("@/views/Admin.vue"),
-    meta: { requiresAdmin: true },
-  },
+  { path: "/",        redirect: "/home" },
+  { path: "/login",   component: () => import("@/views/Login.vue"),        meta: { public: true } },
+
+  // Client pages
+  { path: "/home",         component: () => import("@/views/Home.vue"),         meta: { roles: ["client","dss"] } },
+  { path: "/dashboard",    component: () => import("@/views/Dashboard.vue"),    meta: { roles: ["client","dss"] } },
+  { path: "/my-records",   component: () => import("@/views/MyRecords.vue"),    meta: { roles: ["client","dss"] } },
+  { path: "/benchmarks",   component: () => import("@/views/Benchmarking.vue"), meta: { roles: ["client","dss"] } },
+  { path: "/reports",      component: () => import("@/views/Reports.vue"),      meta: { roles: ["client","dss"] } },
+  { path: "/entry",        component: () => import("@/views/SubmitData.vue"),   meta: { roles: ["client"] } },
+  { path: "/settings",     component: () => import("@/views/Settings.vue"),     meta: { roles: ["client","dss"] } },
+
+  // DSS+ only pages
+  { path: "/portfolio",    component: () => import("@/views/Portfolio.vue"),    meta: { roles: ["dss"] } },
+  { path: "/company-data", component: () => import("@/views/CompanyData.vue"),  meta: { roles: ["dss"] } },
+  { path: "/verification", component: () => import("@/views/Verification.vue"), meta: { roles: ["dss"] } },
+  { path: "/analysis",     component: () => import("@/views/Analysis.vue"),     meta: { roles: ["dss"] } },
+  { path: "/admin",        component: () => import("@/views/Admin.vue"),        meta: { roles: ["dss"] } },
+
+  { path: "/:pathMatch(.*)*", redirect: "/home" },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior: () => ({ top: 0 }),
 });
 
-// Guard — redirect to login if not authenticated
+// Auth guard
 router.beforeEach((to) => {
   const auth = useAuthStore();
-  if (!to.meta.public && !auth.isLoggedIn) {
-    return { name: "Login" };
-  }
-  if (to.meta.requiresAdmin && auth.role !== "dss") {
-    return { name: "Dashboard" };
-  }
+  if (to.meta.public) return true;
+  if (!auth.isLoggedIn)    return "/login";
+  if (to.meta.roles && !to.meta.roles.includes(auth.role)) return "/home";
+  return true;
 });
 
 export default router;
