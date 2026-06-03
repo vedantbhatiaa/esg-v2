@@ -8,8 +8,8 @@ from pathlib import Path
 from datetime import datetime
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_HERE     = Path(__file__).parent.parent          # python-service/
-_DATA_DIR = _HERE.parent / "data_storage"         # data_storage/ next to python-service/
+_HERE     = Path(__file__).resolve().parent.parent  # python-service/
+_DATA_DIR = _HERE.parent / "data_storage"           # esg-v2/data_storage/
 _MASTER_GLOB = str(_DATA_DIR / "master" / "ESG_MASTER_WIDE_ALL_COMPANIES_*.csv")
 _VERIF_CSV   = _DATA_DIR / "verifications.csv"
 
@@ -291,3 +291,77 @@ def set_verification_status(company_name: str, year: int, status: str) -> None:
     with open(_VERIF_CSV, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["Company","Year","Status","UpdatedAt"])
         w.writeheader(); w.writerows(rows)
+# ── Compatibility aliases — the existing __init__.py files use these names ─────
+
+def _id_to_name(company_id: str) -> str:
+    """Convert company slug (verdatyres) → full name (VerdaTyres Corp)."""
+    for c in _COMPANIES:
+        if c["id"].lower() == (company_id or "").lower():
+            return c["name"]
+    return company_id or ""
+
+def _name_to_id(name: str) -> str:
+    for c in _COMPANIES:
+        if c["name"].lower() == (name or "").lower():
+            return c["id"]
+    return (name or "").lower().replace(" ", "_")
+
+def get_submissions(company_id: str = None, year: int = None) -> list:
+    """
+    Compatibility shim for get_companies, get_benchmarks, get_analytics.
+    Old code expected JSON submissions; new code reads master CSV.
+    Returns same shape: [{company_id, year, kpis, status, flags}]
+    """
+    from .calculations import calculate_all_kpis
+    rows = get_master_rows(
+        company_name=_id_to_name(company_id) if company_id else None,
+        year=year,
+    )
+    result = []
+    for row in rows:
+        d = _row_to_dict(row)
+        if not d.get("Company") or not d.get("Year"):
+            continue
+        kpis = calculate_all_kpis(d)
+        result.append({
+            "company_id":   _name_to_id(d["Company"]),
+            "company_name": d["Company"],
+            "year":         d["Year"],
+            "status":       "submitted",
+            "submitted_at": row.get("submitted_at", ""),
+            "kpis":         kpis,
+            "flags":        [],
+        })
+    return result
+
+def get_historical_kpi_series(company_id: str, kpi: str, years: list) -> list:
+    """
+    Compatibility shim for get_analytics.
+    Returns [{year, value}] for a specific KPI and company.
+    """
+    company_name = _id_to_name(company_id) or company_id
+    if not years:
+        return []
+    series = get_historical_series(company_name, min(years), max(years))
+    series_map = {e["year"]: e.get(kpi) for e in series}
+    return [{"year": yr, "value": series_map.get(yr)} for yr in years]
+
+def get_sector_benchmarks(year: int) -> dict:
+    """
+    Compatibility shim for get_benchmarks.
+    Returns {"year": ..., "kpis": {kpi: {q25, median, q75, ...}}}
+    """
+    q = get_sector_quartiles(year)
+    return {"year": year, "kpis": q}
+
+def get_prior_year_kpis(company_id: str, year: int) -> dict:
+    """
+    Compatibility shim for submit_data.
+    Returns computed KPIs for year-1 (used for YoY flags).
+    """
+    from .calculations import calculate_all_kpis
+    company_name = _id_to_name(company_id) or company_id
+    sub = get_submission(company_name, year - 1)
+    if not sub:
+        return {}
+    return calculate_all_kpis(sub)

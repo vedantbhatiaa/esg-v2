@@ -1,0 +1,13 @@
+const express = require("express");
+const router  = express.Router();
+const ps      = require("../services/pythonService");
+
+router.post("/", async (req, res, next) => {
+  try {
+    const { data, error } = await ps.submitData(req.body);
+    if (error) return res.status(500).json({ error });
+    res.json(data);
+  } catch (e) { next(e) }
+});
+
+module.exports = router;
