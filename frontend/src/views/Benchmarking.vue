@@ -163,7 +163,7 @@ const bands = computed(() => {
   const cd = companyData.value;
   // get year-specific kpis
   const yr = selYear.value;
-  const kpis = coTrend.value[yr] || bench?.my_kpis || null;
+  const kpis = coTrend.value[yr] || benchData.value?.my_kpis || null;
 
   const defs = [
     { key:"co2_kpi",    name:"CO₂ Intensity",  unit:"T.CO₂/T", lowerBetter:true,  color:C.co2,    val:kpis?.co2_kpi },
@@ -231,8 +231,15 @@ function mk(key, el, type, datasets, extra={}) {
 
 function secSeries(key, div=1) {
   const raw = sectorData.value?.series?.[key];
-  if (!raw) return FALLBACK[key] || Array(YEARS.length).fill(null);
-  return raw.map(v=>v!=null?v/div:null);
+  if (!raw || !raw.length) return FALLBACK[key] || Array(YEARS.length).fill(null);
+  // analytics returns [{year, value}] - map to YEARS array
+  if (typeof raw[0] === "object" && "year" in raw[0]) {
+    return YEARS.map(y => {
+      const item = raw.find(r => r.year === y);
+      return item?.value != null ? item.value / div : null;
+    });
+  }
+  return raw.map(v => v != null ? v / div : null);
 }
 
 function coLine(key, div=1) {
@@ -248,10 +255,10 @@ async function buildCharts() {
   const secCo2KPI  = secSeries("co2_kpi");
   const secEnergyKPI = secSeries("energy_kpi");
   const secWaterKPI= secSeries("water_kpi");
-  const secRenewPct= secSeries("renew_pct");
-  const secWasteR  = secSeries("waste_recov");
-  const secScope1  = secSeries("scope1", 1e6);
-  const secScope2  = secSeries("scope2", 1e6);
+  const secRenewPct= secSeries("renewable_share_pct");
+  const secWasteR  = secSeries("waste_recovery_pct");
+  const secScope1  = secSeries("scope1_co2_t", 1e6);
+  const secScope2  = secSeries("scope2_co2_t", 1e6);
   const fm = FALLBACK.fuel_mix;
 
   // company trend series
@@ -389,7 +396,7 @@ async function loadData() {
   try {
     const [bench, analytics] = await Promise.all([
       api.getBenchmarks(selYear.value, co),
-      api.getAnalytics({ year_from:2009, year_to:2023, company_id:co }),
+      api.getAnalytics({ year_from:2009, year_to:2023, company_id: auth.companyId || co.toLowerCase().replace(/ /g,'') }),
     ]);
     benchData.value  = bench;
     sectorData.value = analytics;

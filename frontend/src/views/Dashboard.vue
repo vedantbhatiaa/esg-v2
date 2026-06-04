@@ -89,7 +89,14 @@ const rangeLabels = computed(() => rangeYears.value.map(y=>`'${String(y).slice(2
 // ── sector series for range
 function secSeries(key, div=1) {
   const raw = sectorData.value?.series?.[key];
-  if (!raw) return rangeYears.value.map(y => { const i=YEARS.indexOf(y); return FALLBACK[key]?.[i]??null; });
+  if (!raw || !raw.length) return rangeYears.value.map(y => { const i=YEARS.indexOf(y); return FALLBACK[key]?.[i]??null; });
+  // analytics returns [{year,value}] — map to year range
+  if (typeof raw[0] === "object" && "year" in raw[0]) {
+    return rangeYears.value.map(y => {
+      const item = raw.find(r => r.year === y);
+      return item?.value != null ? item.value / div : null;
+    });
+  }
   return rangeYears.value.map(y => { const i=YEARS.indexOf(y); return raw[i]!=null?raw[i]/div:null; });
 }
 function coSeriesForRange(key) {

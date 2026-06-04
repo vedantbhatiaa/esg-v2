@@ -1,12 +1,9 @@
 import azure.functions as func
-import json
-import sys
-import os
-
+import json, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from shared.calculations import calculate_all_kpis, calculate_yoy_all
-from shared.verification import check_yoy_flags, get_submission_status
-from shared.data_loader   import save_submission, get_prior_year_kpis
+from shared.verification  import check_yoy_flags, get_submission_status
+from shared.data_loader   import save_submission, get_prior_year_kpis, _id_to_name
 
 CORS = {
     "Access-Control-Allow-Origin":  "*",
@@ -14,56 +11,42 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
-
 def main(req: func.HttpRequest) -> func.HttpResponse:
     if req.method == "OPTIONS":
         return func.HttpResponse(status_code=204, headers=CORS)
-
     try:
-        body       = req.get_json()
-        company_id = body["company_id"]
-        year       = int(body["year"])
-        form_data  = body["data"]          # merged 6-step wizard payload
+        body         = req.get_json()
+        company_id   = body.get("company_id", "")
+        year         = int(body.get("year", 2023))
+        form_data    = body.get("data", {})
+        company_name = _id_to_name(company_id) or company_id
 
-        # Calculate all KPIs using original logic
         kpis = calculate_all_kpis(form_data)
+        kpis["_raw_iso_total"]     = int(form_data.get("total_sites", 0))
+        kpis["_raw_iso_certified"] = int(form_data.get("iso_sites", 0))
 
-        # Store raw ISO values for logical checks
-        kpis["_raw_iso_total"]     = int(form_data.get("iso_total_sites", 0))
-        kpis["_raw_iso_certified"] = int(form_data.get("iso_certified_sites", 0))
-
-        # Get prior year for YoY comparison
         prior_kpis = get_prior_year_kpis(company_id, year) or {}
-        yoy        = calculate_yoy_all(kpis, prior_kpis)
-        flags      = check_yoy_flags(kpis, prior_kpis)
-        status     = get_submission_status(flags)
+        yoy    = calculate_yoy_all(kpis, prior_kpis)
+        flags  = check_yoy_flags(kpis, prior_kpis)
+        status = get_submission_status(flags)
 
-        # Persist to local JSON store (swap for Azure SQL later)
-        submission = {
-            "company_id": company_id,
-            "year":       year,
-            "raw_data":   form_data,
-            "kpis":       kpis,
-            "yoy":        yoy,
-            "flags":      flags,
-            "status":     status,
-        }
-        saved = save_submission(submission)
+        saved = save_submission(company_name, year, form_data)
 
         return func.HttpResponse(
-            json.dumps({**saved, "message": "Submission saved successfully"}),
-            mimetype="application/json",
-            status_code=200,
-            headers=CORS,
-        )
-
-    except KeyError as e:
-        return func.HttpResponse(
-            json.dumps({"error": f"Missing required field: {e}"}),
-            mimetype="application/json", status_code=400, headers=CORS,
-        )
+            json.dumps({
+                "saved":     saved.get("saved", True),
+                "n_records": saved.get("n_records", 0),
+                "kpis":      kpis,
+                "yoy":       yoy,
+                "flags":     flags,
+                "status":    status,
+                "company":   company_name,
+                "year":      year,
+                "message":   f"Submission for {company_name} {year} saved successfully.",
+            }, default=str),
+            mimetype="application/json", status_code=200, headers=CORS)
     except Exception as e:
+        import traceback
         return func.HttpResponse(
-            json.dumps({"error": str(e)}),
-            mimetype="application/json", status_code=500, headers=CORS,
-        )
+            json.dumps({"error": str(e), "trace": traceback.format_exc()}),
+            status_code=500, mimetype="application/json", headers=CORS)

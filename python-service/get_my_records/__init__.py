@@ -10,41 +10,46 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
-# Template row definitions: (section, label, unit, field, formula_field)
 TEMPLATE_ROWS = [
-    ("ISO 14001",   "Total no. of sites",          "no.",     "total_sites",    None),
-    ("ISO 14001",   "ISO 14001 certified sites",   "no.",     "iso_sites",      None),
-    ("ISO 14001",   "% certified sites",           "%",       None,             "iso_certified_pct"),
-    ("Production",  "Production",                  "metric T","production",     None),
-    ("Water",       "Water withdrawals",           "m³",      "water_withdrawals",None),
-    ("Water",       "Water Intensity KPI",         "m³/T",    None,             "water_kpi"),
-    ("Energy",      "Total Electricity",           "GJ",      None,             "total_elec_gj"),
-    ("Energy",      "— Renewable electricity purchased","GJ", "renew_elec_purchased",None),
-    ("Energy",      "— Non-renewable electricity","GJ",       "nonrenew_elec_purchased",None),
-    ("Energy",      "Natural Gas",                 "GJ LHV",  "nat_gas",        None),
-    ("Energy",      "Coal (all types)",            "GJ LHV",  "coal_sub",       None),
-    ("Energy",      "Diesel",                      "GJ LHV",  "diesel",         None),
-    ("Energy",      "Biomass",                     "GJ LHV",  "biomass",        None),
-    ("Energy",      "Total Energy",                "GJ",      None,             "total_energy_gj"),
-    ("Energy",      "Energy Intensity KPI",        "GJ/T",    None,             "energy_kpi"),
-    ("CO2",         "CO₂ Scope 2 from Steam",      "T.CO₂",   "co2_scope2_steam",None),
-    ("CO2",         "Total CO₂ (Scope 1+2)",       "T.CO₂",   None,             "total_co2_t"),
-    ("CO2",         "CO₂ Intensity KPI",           "T.CO₂/T", None,             "co2_kpi"),
-    ("CO2",         "Scope 1 CO₂",                 "T.CO₂",   None,             "scope1_co2_t"),
-    ("CO2",         "Scope 2 CO₂",                 "T.CO₂",   None,             "scope2_co2_t"),
-    ("Waste",       "Total amount of waste",       "metric T","waste_total",    None),
-    ("Waste",       "Waste sent to recovery",      "metric T","waste_recovery",  None),
-    ("Waste",       "Waste Recovery Rate",         "%",       None,             "waste_recovery_pct"),
+    ("ISO 14001",  "Total no. of sites",               "no.",     "total_sites",       None),
+    ("ISO 14001",  "ISO 14001 certified sites",        "no.",     "iso_sites",         None),
+    ("ISO 14001",  "% certified sites",                "%",       None,                "iso_certified_pct"),
+    ("Production", "Production",                       "metric T","production_t",      None),
+    ("Water",      "Water withdrawals",                "m3",      "total_water_m3",    None),
+    ("Water",      "Water Intensity KPI",              "m3/T",    None,                "water_kpi"),
+    ("Energy",     "Total Electricity",                "GJ",      None,                "total_elec_gj"),
+    ("Energy",     "Renewable electricity purchased",  "GJ",      "renew_elec_gj",     None),
+    ("Energy",     "Non-renewable electricity",        "GJ",      "nonrenew_elec_gj",  None),
+    ("Energy",     "Self-generated electricity",       "GJ",      "self_gen_elec_gj",  None),
+    ("Energy",     "Purchased Steam",                  "GJ",      "purchased_steam_gj",None),
+    ("Energy",     "Natural Gas",                      "GJ LHV",  "nat_gas_gj",        None),
+    ("Energy",     "Coal",                             "GJ LHV",  "coal_gj",           None),
+    ("Energy",     "Propane",                          "GJ LHV",  "propane_gj",        None),
+    ("Energy",     "Fuel Oil",                         "GJ LHV",  "fuel_oil_gj",       None),
+    ("Energy",     "Diesel",                           "GJ LHV",  "diesel_gj",         None),
+    ("Energy",     "Petrol",                           "GJ LHV",  "petrol_gj",         None),
+    ("Energy",     "Biomass",                          "GJ LHV",  "biomass_gj",        None),
+    ("Energy",     "LPG",                              "GJ LHV",  "lpg_gj",            None),
+    ("Energy",     "Other fuels",                      "GJ LHV",  "other_fuel_gj",     None),
+    ("Energy",     "Total Energy",                     "GJ",      None,                "total_energy_gj"),
+    ("Energy",     "Energy Intensity KPI",             "GJ/T",    None,                "energy_kpi"),
+    ("CO2",        "Scope 1 CO2",                      "T.CO2",   None,                "scope1_co2_t"),
+    ("CO2",        "Scope 2 CO2",                      "T.CO2",   None,                "scope2_co2_t"),
+    ("CO2",        "Total CO2",                        "T.CO2",   None,                "total_co2_t"),
+    ("CO2",        "CO2 Intensity KPI",                "T.CO2/T", None,                "co2_kpi"),
+    ("Waste",      "Total waste",                      "metric T","waste_total_t",     None),
+    ("Waste",      "Waste recovered",                  "metric T","waste_recovered_t", None),
+    ("Waste",      "Waste Recovery Rate",              "%",       None,                "waste_recovery_pct"),
 ]
 
 def _fmt(v, unit):
-    if v is None or v == 0:
-        return "—"
-    if unit in ("%",):
-        return f"{v:.1f}%"
-    if unit in ("T.CO₂/T", "m³/T", "GJ/T"):
-        return f"{v:.3f}"
-    return f"{v:,.0f}"
+    if v is None: return "—"
+    try: fv = float(v)
+    except: return str(v)
+    if fv == 0: return "—"
+    if unit == "%": return f"{fv:.1f}%"
+    if unit in ("T.CO2/T", "m3/T", "GJ/T"): return f"{fv:.3f}"
+    return f"{fv:,.0f}"
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     if req.method == "OPTIONS":
@@ -52,64 +57,57 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     try:
         company  = req.params.get("company", "VerdaTyres Corp")
         sel_year = int(req.params.get("year", 2023))
-
         years    = get_company_years(company)
-        yr_from  = min(years) if years else 2009
-        series   = get_historical_series(company, yr_from, sel_year)
+        if not years:
+            return func.HttpResponse(json.dumps({
+                "error": f"No data for {company}. Run build_esg_master.py first.",
+                "rows": [], "all_years": [], "available_years": [sel_year]
+            }), mimetype="application/json", headers=CORS)
+
+        series    = get_historical_series(company, min(years), max(years))
         all_years = [e["year"] for e in series]
 
-        # Build raw data per year
-        raw_by_year: dict[int, dict] = {}
+        raw_by_year = {}
         for yr in all_years:
-            sub   = get_submission(company, yr)
-            kpis  = calculate_all_kpis(sub or {})
-            raw_by_year[yr] = {**(sub or {}), **kpis}
+            sub          = get_submission(company, yr) or {}
+            calc         = calculate_all_kpis(sub)
+            series_entry = next((e for e in series if e["year"] == yr), {})
+            raw_by_year[yr] = {**sub, **calc, **series_entry}
 
-        # Build template rows
         rows = []
         for section, label, unit, raw_field, kpi_field in TEMPLATE_ROWS:
-            row = {
-                "section": section,
-                "label": label,
-                "unit": unit,
-                "type": "input" if raw_field else "formula",
-            }
             values = {}
             for yr in all_years:
                 d = raw_by_year.get(yr, {})
-                if raw_field:
-                    v = d.get(raw_field)
-                else:
-                    v = d.get(kpi_field)
+                v = d.get(raw_field or kpi_field)
                 values[str(yr)] = _fmt(v, unit)
-            row["values"] = values
-            # YoY for last two years
+
+            yoy = "—"
             if len(all_years) >= 2:
-                last   = raw_by_year.get(all_years[-1], {})
-                before = raw_by_year.get(all_years[-2], {})
-                field  = raw_field or kpi_field
-                v_last = last.get(field, 0) or 0
-                v_prev = before.get(field, 0) or 0
-                if v_prev and v_prev != 0:
-                    pct = (v_last - v_prev) / abs(v_prev) * 100
-                    row["yoy"] = f"{pct:+.1f}%"
-                else:
-                    row["yoy"] = "—"
-            rows.append(row)
+                field = raw_field or kpi_field
+                try:
+                    v_last = float(raw_by_year.get(all_years[-1], {}).get(field) or 0)
+                    v_prev = float(raw_by_year.get(all_years[-2], {}).get(field) or 0)
+                    if v_prev:
+                        pct = (v_last - v_prev) / abs(v_prev) * 100
+                        yoy = f"{pct:+.1f}%"
+                except Exception:
+                    pass
 
-        # Verification status
-        verif = get_verification_status(company, sel_year)
+            rows.append({"section":section,"label":label,"unit":unit,
+                         "type":"input" if raw_field else "formula",
+                         "values":values,"yoy":yoy})
 
-        result = {
-            "company": company,
-            "selected_year": sel_year,
-            "available_years": sorted(set(years + [sel_year])),
-            "next_year": max(years) + 1 if years else sel_year + 1,
-            "all_years": all_years,
-            "rows": rows,
-            "verification_status": verif,
-        }
-        return func.HttpResponse(json.dumps(result), mimetype="application/json", headers=CORS)
+        return func.HttpResponse(json.dumps({
+            "company":           company,
+            "selected_year":     sel_year,
+            "available_years":   sorted(set(list(years)+[sel_year])),
+            "next_year":         max(years)+1,
+            "all_years":         all_years,
+            "rows":              rows,
+            "verification_status": get_verification_status(company, sel_year),
+        }, default=str), mimetype="application/json", headers=CORS)
     except Exception as ex:
-        return func.HttpResponse(json.dumps({"error": str(ex)}), status_code=500,
-                                 mimetype="application/json", headers=CORS)
+        import traceback
+        return func.HttpResponse(json.dumps({"error":str(ex),"trace":traceback.format_exc()}),
+                                 status_code=500, mimetype="application/json", headers=CORS)
