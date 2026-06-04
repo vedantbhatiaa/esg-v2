@@ -1,45 +1,55 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+/**
+ * api.js — All HTTP calls. Vite proxies /api → Node:3001 → Python Functions:7071
+ */
+import axios from "axios";
 
-async function _fetch(path, opts = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  })
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
-  return json
-}
+const http = axios.create({ baseURL: "/api", timeout: 30000 });
 
-const api = {
-  // Auth
-  login:           (email, password)     => _fetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+http.interceptors.request.use((cfg) => {
+  const raw = localStorage.getItem("esg_user");
+  if (raw) {
+    try {
+      const u = JSON.parse(raw);
+      cfg.headers["X-Company"] = u.company || "dss";
+      cfg.headers["X-Role"]    = u.is_dss ? "dss" : "client";
+    } catch(_) {}
+  }
+  return cfg;
+});
 
-  // Home
-  getHomeData:     (company, year)       => _fetch(`/home?company=${encodeURIComponent(company)}&year=${year}`),
+export const api = {
+  // Companies — returns array of names or array of objects
+  getCompanies: (params) =>
+    http.get("/companies", { params }).then(r => {
+      const d = r.data;
+      // Normalize to plain string array
+      if (Array.isArray(d) && d.length && typeof d[0] === "object" && d[0].name)
+        return d.map(c => c.name);
+      return d;
+    }),
 
-  // My Records
-  getMyRecords:    (company, year)       => _fetch(`/records?company=${encodeURIComponent(company)}&year=${year}`),
+  // Analytics — sector + optional company overlay
+  getAnalytics: (params) => http.get("/analytics", { params }).then(r => r.data),
 
-  // Analytics / Dashboard
-  getAnalytics:    (params)              => _fetch('/analytics?' + new URLSearchParams(params)),
+  // Benchmarks — year + optional company for company-specific bands
+  getBenchmarks: (year, company) =>
+    http.get("/benchmarks", { params: { year, company } }).then(r => r.data),
 
-  // Benchmarks
-  getBenchmarks:   (params)              => _fetch('/benchmarks?' + new URLSearchParams(params)),
+  // Company data — all years summary or single year detail
+  getCompanyData: (company, year) =>
+    http.get("/company_data", { params: { company, year } }).then(r => r.data),
 
-  // Reports
-  getReports:      (company, year)       => _fetch(`/reports?company=${encodeURIComponent(company)}&year=${year}`),
+  // Submit full data — saves to master CSV + parquet version
+  submitData: (payload) => http.post("/submissions", payload).then(r => r.data),
 
-  // Submit Data
-  submitData:      (body)                => _fetch('/submissions', { method: 'POST', body: JSON.stringify(body) }),
+  // Live KPI calc (no save)
+  calculateKPI: (formData) => http.post("/submissions/calculate", formData).then(r => r.data),
 
-  // Companies
-  getCompanies:    ()                    => _fetch('/companies'),
+  // Verification status
+  setVerification: (body) => http.post("/verification", body).then(r => r.data),
 
-  // Verification (DSS+)
-  getVerificationQueue: ()               => _fetch('/verification'),
-  setVerificationStatus: (body)          => _fetch('/verification', { method: 'POST', body: JSON.stringify(body) }),
-}
+  // Health check
+  health: () => http.get("/health").then(r => r.data),
+};
 
-export default api
-export const { login, getHomeData, getMyRecords, getAnalytics, getBenchmarks,
-               getReports, submitData, getCompanies } = api
+export default api;

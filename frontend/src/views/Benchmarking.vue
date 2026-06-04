@@ -1,463 +1,441 @@
 <template>
-  <div class="tip-fade-in">
-    <div class="flex items-start justify-between mb-4">
-      <div>
-        <h1 class="text-[20px] font-extrabold text-[#0F172A] tracking-tight">Benchmarking</h1>
-        <p class="text-[11px] text-[#64748B] mt-0.5">Industry peer comparison · TIP sector quartiles</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <select v-if="isDss" v-model="selCompany" @change="load"
-          class="h-9 px-3 border border-[#E2E8F0] rounded-lg text-[12px] bg-white appearance-none cursor-pointer">
-          <option v-for="c in companies" :key="c.name" :value="c.name">{{ c.name }}</option>
-        </select>
-        <select v-model.number="selYear" @change="load"
-          class="h-9 px-3 border border-[#E2E8F0] rounded-lg text-[12px] bg-white appearance-none cursor-pointer">
-          <option v-for="yr in years" :key="yr" :value="yr">{{ yr }}</option>
-        </select>
-      </div>
+  <div>
+    <h2 class="text-xl font-bold text-gray-900 mb-1">Benchmarking</h2>
+    <p class="text-sm text-gray-400 mb-4">Industry peer comparison · TIP sector quartiles</p>
+
+    <!-- Selectors -->
+    <div class="flex gap-3 mb-4 flex-wrap items-center">
+      <select v-if="auth.isDSS" v-model="company" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white min-w-48">
+        <option v-for="c in companies" :key="c" :value="c">{{ c }}</option>
+      </select>
+      <select v-model="selYear" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white">
+        <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
+      </select>
+      <span v-if="loading" class="text-xs text-gray-400">Loading…</span>
     </div>
 
-    <!-- ── 5 KPI Chips ──────────────────────────────────────────────────────── -->
+    <!-- 5 KPI position chips -->
     <div class="grid grid-cols-5 gap-3 mb-4">
-      <div v-for="chip in kpiChips" :key="chip.label"
-        class="bg-white border border-[#E2E8F0] rounded-xl p-4">
-        <div class="text-[9px] font-bold text-[#94A3B8] uppercase tracking-wider mb-1">{{ chip.label }}</div>
-        <div class="text-[22px] font-extrabold leading-none mb-2" :style="{ color: chip.color }">
-          {{ chip.value }}
+      <div v-for="(b, i) in bands" :key="b.key"
+        class="bg-white border border-gray-100 rounded-xl p-3 hover:shadow-sm transition-shadow">
+        <div class="text-[9.5px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{{ b.name }}</div>
+        <div class="text-2xl font-bold leading-tight" :style="{color:b.color}">{{ b.displayVal }}</div>
+        <div class="text-[9px] text-gray-400 mb-2">{{ b.unit }}</div>
+        <div class="bg-gray-100 rounded h-1.5 overflow-hidden mb-1">
+          <div class="h-full rounded transition-all duration-1000" :style="{width:b.posPct+'%', background:b.rankColor}"></div>
         </div>
-        <div class="text-[9px] text-[#64748B] mb-2">{{ chip.unit }}</div>
-        <!-- Percentile bar -->
-        <div class="h-1.5 bg-[#F1F5F9] rounded-full relative overflow-visible">
-          <div class="absolute inset-0 h-full rounded-full"
-            :style="{ background: `linear-gradient(to right, #DCFCE7 0%, #FEF9C3 40%, #FEE2E2 100%)` }"></div>
-          <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-4 rounded-sm shadow-sm"
-            :style="{ left: chip.pct + '%', background: chip.color }"></div>
-        </div>
-        <div class="flex justify-between text-[9px] text-[#94A3B8] mt-1">
-          <span>{{ chip.lowerBetter ? 'Best' : 'Low' }}</span>
-          <span>{{ chip.label === 'CO₂ INTENSITY' || chip.lowerBetter ? 'Worst' : 'High' }}</span>
+        <div class="flex justify-between text-[9px]">
+          <span class="text-gray-400">{{ b.lowerBetter ? "Worst" : "Low" }}</span>
+          <span class="font-semibold" :style="{color:b.rankColor}">{{ b.rankLabel }}</span>
+          <span class="text-gray-400">{{ b.lowerBetter ? "Best" : "High" }}</span>
         </div>
       </div>
     </div>
 
-    <!-- ── Download PDF ─────────────────────────────────────────────────────── -->
-    <button @click="downloadPdf"
-      class="w-full h-10 mb-4 bg-red-500 hover:bg-red-600 text-white rounded-lg
-             font-semibold text-[13px] flex items-center justify-center gap-2 transition-colors">
-      ⬇ Download Full Benchmarking Report (PDF)
-    </button>
+    <!-- 6 KPI tabs -->
+    <div class="flex border-b border-gray-200 overflow-x-auto mb-0">
+      <button v-for="tab in tabs" :key="tab.id" @click="setTab(tab.id)"
+        class="px-4 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap"
+        :class="activeTab===tab.id ? 'border-navy text-navy font-semibold' : 'border-transparent text-gray-400 hover:text-gray-700'">
+        {{ tab.label }}
+      </button>
+    </div>
 
-    <!-- ── 7 tabs ───────────────────────────────────────────────────────────── -->
-    <div class="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
-      <div class="flex border-b border-[#E2E8F0] overflow-x-auto">
-        <button v-for="t in TABS" :key="t.id" @click="activeTab = t.id"
-          class="px-4 py-3 text-[12px] font-semibold whitespace-nowrap transition-colors flex-shrink-0"
-          :class="activeTab === t.id
-            ? 'border-b-2 border-[#0A2240] text-[#0A2240]'
-            : 'text-[#64748B] hover:text-[#0F172A]'">
-          {{ t.label }}
-        </button>
+    <!-- General -->
+    <div v-show="activeTab==='general'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">ESG Performance Radar</div>
+        <div class="p-4" style="height:300px"><canvas ref="radarChart"></canvas></div>
       </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Sector Percentile Position (100=best)</div>
+        <div class="p-4" style="height:220px"><canvas ref="posChart"></canvas></div>
+        <div v-if="improvData.length" class="px-4 pb-4">
+          <div class="text-xs font-semibold text-gray-500 mb-2">Improvement since base year</div>
+          <table class="w-full text-xs">
+            <tbody>
+              <tr v-for="r in improvData" :key="r.kpi" class="border-t border-gray-50">
+                <td class="py-1 text-gray-600">{{ r.kpi }}</td>
+                <td class="py-1 text-right font-semibold" :class="r.good?'text-green-600':'text-red-500'">{{ r.val }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-      <div class="p-5">
-        <!-- General -->
-        <template v-if="activeTab === 'general'">
-          <p class="text-[11px] text-[#64748B] mb-4">Overall ESG performance profile vs sector</p>
-          <div class="grid grid-cols-2 gap-5">
-            <div>
-              <div class="text-[12px] font-semibold mb-2">ESG Radar Profile</div>
-              <PlotlyChart :traces="radarTraces" :layout="radarLayout" :height="300"
-                :chartKey="`radar-${selYear}-${selCompany}`" />
-            </div>
-            <div>
-              <div class="text-[12px] font-semibold mb-2">Performance vs Sector (◆=You · ─=Median · ▬=IQR)</div>
-              <PlotlyChart :traces="whiskerTraces" :layout="whiskerLayout" :height="300"
-                :chartKey="`whisker-${selYear}-${selCompany}`" />
-            </div>
-          </div>
-          <!-- Improvement table -->
-          <div class="mt-5 border-t border-[#E2E8F0] pt-4">
-            <div class="text-[12px] font-semibold mb-3">Improvement since {{ firstYear }}</div>
-            <table class="w-full text-[12px]">
-              <thead>
-                <tr class="bg-[#F8FAFC]">
-                  <th class="px-3 py-2 text-left text-[10px] font-bold text-[#64748B] uppercase">KPI</th>
-                  <th class="px-3 py-2 text-right text-[10px] font-bold text-[#64748B] uppercase">{{ firstYear }}→{{ selYear }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="imp in improvements" :key="imp.kpi" class="border-t border-[#F1F5F9]">
-                  <td class="px-3 py-2">{{ imp.kpi }}</td>
-                  <td class="px-3 py-2 text-right font-semibold"
-                    :class="imp.good ? 'text-[#16A34A]' : 'text-red-500'">{{ imp.value }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
+    <!-- CO2 -->
+    <div v-show="activeTab==='co2'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">CO₂ Intensity Trend vs Sector (T.CO₂/T)</div>
+        <div class="p-4" style="height:260px"><canvas ref="co2TrendChart"></canvas></div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Scope 1 vs Scope 2 (T.CO₂)</div>
+        <div class="p-4" style="height:260px"><canvas ref="scopeChart"></canvas></div>
+      </div>
+    </div>
 
-        <!-- CO₂ -->
-        <template v-if="activeTab === 'co2'">
-          <p class="text-[11px] text-[#64748B] mb-3">CO₂ intensity vs sector peers — Q1/Median/Q3 reference lines</p>
-          <PlotlyChart :traces="co2BenchTraces" :layout="sectorLayout('CO₂ Intensity (T.CO₂/T)')"
-            :height="280" :chartKey="`co2b-${selYear}-${selCompany}`" />
-          <div class="mt-4">
-            <PlotlyChart :traces="scopeAreaTraces" :layout="sectorLayout('Scope 1 vs Scope 2 (T.CO₂)')"
-              :height="220" :chartKey="`scope-${selYear}-${selCompany}`" />
-          </div>
-        </template>
+    <!-- Energy -->
+    <div v-show="activeTab==='energy'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Energy Intensity Trend vs Sector (GJ/T)</div>
+        <div class="p-4" style="height:260px"><canvas ref="energyTrendChart"></canvas></div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Energy Mix by Source (GJ)</div>
+        <div class="p-4" style="height:260px"><canvas ref="fuelChart"></canvas></div>
+      </div>
+    </div>
 
-        <!-- Energy -->
-        <template v-if="activeTab === 'energy'">
-          <div class="grid grid-cols-2 gap-5">
-            <PlotlyChart :traces="energyBenchTraces" :layout="sectorLayout('Energy Intensity (GJ/T)')"
-              :height="260" :chartKey="`eb-${selYear}-${selCompany}`" />
-            <PlotlyChart :traces="fuelMixTraces" :layout="{ barmode: 'stack', yaxis: { title: { text: 'GJ' } } }"
-              :height="260" :chartKey="`fm-${selYear}-${selCompany}`" />
-          </div>
-        </template>
+    <!-- Electricity -->
+    <div v-show="activeTab==='elec'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Electricity Mix (%)</div>
+        <div class="p-4" style="height:260px"><canvas ref="elecMixChart"></canvas></div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Renewable Electricity Share vs Sector (%)</div>
+        <div class="p-4" style="height:260px"><canvas ref="renewTrendChart"></canvas></div>
+      </div>
+    </div>
 
-        <!-- Electricity -->
-        <template v-if="activeTab === 'electricity'">
-          <div class="grid grid-cols-2 gap-5">
-            <PlotlyChart :traces="elecMixTraces" :layout="{ barmode: 'stack', yaxis: { title: { text: '%' }, range: [0,100] } }"
-              :height="260" :chartKey="`emix-${selYear}-${selCompany}`" />
-            <PlotlyChart :traces="renewBenchTraces" :layout="sectorLayout('Renewable Electricity Share (%)')"
-              :height="260" :chartKey="`rew-${selYear}-${selCompany}`" />
-          </div>
-        </template>
+    <!-- Water -->
+    <div v-show="activeTab==='water'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Water Intensity Trend vs Sector (m³/T)</div>
+        <div class="p-4" style="height:260px"><canvas ref="waterTrendChart"></canvas></div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Water Withdrawals & Intensity</div>
+        <div class="p-4" style="height:260px"><canvas ref="waterComboChart"></canvas></div>
+      </div>
+    </div>
 
-        <!-- Water -->
-        <template v-if="activeTab === 'water'">
-          <div class="grid grid-cols-2 gap-5">
-            <PlotlyChart :traces="waterBenchTraces" :layout="sectorLayout('Water Intensity (m³/T)')"
-              :height="260" :chartKey="`wb-${selYear}-${selCompany}`" />
-            <PlotlyChart :traces="waterBarTraces" :layout="{ yaxis: { title: { text: 'M m³' }, tickformat: '.1f' } }"
-              :height="260" :chartKey="`wbar-${selYear}-${selCompany}`" />
-          </div>
-        </template>
-
-        <!-- Waste -->
-        <template v-if="activeTab === 'waste'">
-          <div class="grid grid-cols-2 gap-5">
-            <PlotlyChart :traces="wasteBenchTraces" :layout="sectorLayout('Waste Recovery Rate (%)')"
-              :height="260" :chartKey="`wasteb-${selYear}-${selCompany}`" />
-            <PlotlyChart :traces="wasteTotalTraces" :layout="{ barmode: 'group', yaxis: { title: { text: 'metric T' } } }"
-              :height="260" :chartKey="`wastet-${selYear}-${selCompany}`" />
-          </div>
-        </template>
-
-        <!-- Advanced -->
-        <template v-if="activeTab === 'advanced'">
-          <p class="text-[11px] text-[#64748B] mb-4">Paris-aligned trajectory · Decoupling analysis · KPI scorecard</p>
-          <div class="grid grid-cols-2 gap-5 mb-5">
-            <div>
-              <div class="text-[12px] font-semibold mb-2">CO₂ Intensity vs Paris-Aligned Target (T.CO₂/T)</div>
-              <PlotlyChart :traces="parisTraces" :layout="parisLayout" :height="280"
-                :chartKey="`paris-${selYear}-${selCompany}`" />
-            </div>
-            <div>
-              <div class="text-[12px] font-semibold mb-2">Decoupling: Renewable % vs CO₂ Intensity</div>
-              <PlotlyChart :traces="decouplingTraces" :layout="decouplingLayout" :height="280"
-                :chartKey="`dcpl-${selYear}-${selCompany}`" />
-            </div>
-          </div>
-          <!-- KPI Scorecard table -->
-          <div class="border border-[#E2E8F0] rounded-xl overflow-hidden">
-            <div class="px-4 py-3 bg-[#F8FAFC] border-b border-[#E2E8F0] text-[12px] font-semibold">
-              KPI Scorecard — {{ selYear }} vs Sector Quartiles
-            </div>
-            <table class="w-full text-[12px]">
-              <thead>
-                <tr class="border-b border-[#E2E8F0]">
-                  <th class="px-4 py-2.5 text-left text-[10px] font-bold text-[#64748B] uppercase">KPI</th>
-                  <th class="px-3 py-2.5 text-right text-[10px] font-bold text-[#64748B] uppercase">Your Value</th>
-                  <th class="px-3 py-2.5 text-right text-[10px] font-bold text-[#64748B] uppercase">Q1 (25th)</th>
-                  <th class="px-3 py-2.5 text-right text-[10px] font-bold text-[#64748B] uppercase">Median</th>
-                  <th class="px-3 py-2.5 text-right text-[10px] font-bold text-[#64748B] uppercase">Q3 (75th)</th>
-                  <th class="px-3 py-2.5 text-left text-[10px] font-bold text-[#64748B] uppercase">vs Median</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in scorecardRows" :key="row.kpi" class="border-t border-[#F1F5F9]">
-                  <td class="px-4 py-2">{{ row.kpi }}</td>
-                  <td class="px-3 py-2 text-right font-semibold">{{ row.myVal }}</td>
-                  <td class="px-3 py-2 text-right text-[#64748B]">{{ row.q1 }}</td>
-                  <td class="px-3 py-2 text-right text-[#64748B]">{{ row.median }}</td>
-                  <td class="px-3 py-2 text-right text-[#64748B]">{{ row.q3 }}</td>
-                  <td class="px-3 py-2 font-semibold"
-                    :class="row.good ? 'text-[#16A34A]' : 'text-red-500'">
-                    {{ row.good ? '↓ Improving' : '↑ Needs work' }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
+    <!-- Waste -->
+    <div v-show="activeTab==='waste'" class="mt-4 grid grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Waste Recovery Rate vs Sector (%)</div>
+        <div class="p-4" style="height:260px"><canvas ref="wasteRecovChart"></canvas></div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-50 text-sm font-semibold">Total Waste vs Recovered (T)</div>
+        <div class="p-4" style="height:260px"><canvas ref="wasteVolChart"></canvas></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useAuthStore } from '@/stores/auth.js'
-import { useEsgStore }  from '@/stores/esg.js'
-import PlotlyChart from '@/components/PlotlyChart.vue'
-import api from '@/services/api.js'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { Chart } from "chart.js";
+import { useAuthStore } from "@/stores/auth.js";
+import api from "@/services/api.js";
+import { C, TOOLTIP, ANIMATION, AXIS, YEARS, YEAR_LABELS, FALLBACK, mergeSeries } from "@/composables/useCharts.js";
 
-const auth = useAuthStore()
-const esg  = useEsgStore()
-const isDss = computed(() => auth.role === 'dss')
+const auth = useAuthStore();
+const company = ref(auth.isDSS ? "" : auth.companyName);
+const selYear = ref(2023);
+const companies = ref([]);
+const availableYears = ref([]);
+const loading = ref(false);
+const activeTab = ref("general");
 
-const TABS = [
-  { id: 'general',     label: 'General' },
-  { id: 'co2',         label: 'CO₂' },
-  { id: 'energy',      label: 'Energy' },
-  { id: 'electricity', label: 'Electricity' },
-  { id: 'water',       label: 'Water' },
-  { id: 'waste',       label: 'Waste' },
-  { id: 'advanced',    label: 'Advanced' },
-]
+// API data
+const benchData   = ref(null);
+const companyData = ref(null);  // { years:[], summary:[] } all years
+const coTrend     = ref({});    // { year: kpis }
+const sectorData  = ref(null);  // analytics
 
-const activeTab  = ref('general')
-const selCompany = ref(auth.companyName)
-const selYear    = ref(2023)
-const years      = ref([2023, 2022, 2021, 2020])
-const companies  = ref([])
-const bench      = ref(null)
+const tabs = [
+  { id:"general", label:"General" },
+  { id:"co2",     label:"CO₂" },
+  { id:"energy",  label:"Energy" },
+  { id:"elec",    label:"Electricity" },
+  { id:"water",   label:"Water" },
+  { id:"waste",   label:"Waste" },
+];
+function setTab(id) { activeTab.value = id; }
 
-const CAT_CO2   = '#475569'; const CAT_ENERGY = '#F59E0B'; const CAT_WATER  = '#0891B2'
-const CAT_RENEW = '#16A34A'; const CAT_WASTE  = '#7C3AED'; const GREEN = '#16A34A'
+// ── Static quartile bands from benchData + company KPIs
+const bands = computed(() => {
+  const bd = benchData.value?.bands || {};
+  const cd = companyData.value;
+  // get year-specific kpis
+  const yr = selYear.value;
+  const kpis = coTrend.value[yr] || null;
 
-async function load() {
+  const defs = [
+    { key:"co2_kpi",    name:"CO₂ Intensity",  unit:"T.CO₂/T", lowerBetter:true,  color:C.co2,    val:kpis?.co2_kpi },
+    { key:"energy_kpi", name:"Energy Intensity",unit:"GJ/T",    lowerBetter:true,  color:C.energy, val:kpis?.energy_kpi },
+    { key:"water_kpi",  name:"Water Intensity", unit:"m³/T",    lowerBetter:true,  color:C.water,  val:kpis?.water_kpi },
+    { key:"renew_pct",  name:"Renewable Elec.", unit:"%",       lowerBetter:false, color:C.renew,  val:kpis?.renew_share_pct },
+    { key:"waste_pct",  name:"Waste Recovery",  unit:"%",       lowerBetter:false, color:C.waste,  val:kpis?.waste_recovery_pct!=null?kpis.waste_recovery_pct*100:null },
+  ];
+
+  return defs.map(d => {
+    const b = bd[d.key] || { q10:0, q25:0, median:0, q75:0, q90:1 };
+    const lo=b.q10, hi=b.q90, span=Math.max(hi-lo, 0.001);
+    const v = d.val ?? 0;
+    let posPct = ((v-lo)/span*100);
+    if (d.lowerBetter) posPct = 100 - posPct;
+    posPct = Math.max(0, Math.min(100, posPct));
+    const rankColor = posPct>=70?"#16A34A":posPct>=40?"#F59E0B":"#DC2626";
+    const rankLabel = posPct>=75?"Top quartile":posPct>=50?"Above median":posPct>=25?"Below median":"Bottom quartile";
+    return { ...d, b, posPct, rankColor, rankLabel,
+      displayVal: d.val!=null ? (d.lowerBetter ? d.val.toFixed(3) : d.val.toFixed(1)) : "—" };
+  });
+});
+
+const improvData = computed(() => {
+  const ys = Object.keys(coTrend.value).map(Number).sort((a,b)=>a-b);
+  if (ys.length < 2) return [];
+  const base = coTrend.value[ys[0]]; const end = coTrend.value[ys[ys.length-1]];
+  if (!base || !end) return [];
+  const pct = (cur, prev, down=true) => {
+    if (!prev||prev===0) return null;
+    const p = ((cur-prev)/Math.abs(prev)*100).toFixed(1);
+    return { val:`${p>0?"+":""}${p}%`, good:(p<0)===down };
+  };
+  return [
+    { kpi:"CO₂ Intensity",    ...pct(end.co2_kpi, base.co2_kpi)        },
+    { kpi:"Energy Intensity", ...pct(end.energy_kpi, base.energy_kpi)  },
+    { kpi:"Water Intensity",  ...pct(end.water_kpi, base.water_kpi)    },
+    { kpi:"Renewable Elec.",  ...pct(end.renew_share_pct, base.renew_share_pct, false) },
+    { kpi:"Waste Recovery",   ...pct(end.waste_recovery_pct, base.waste_recovery_pct, false) },
+  ].filter(r=>r.val);
+});
+
+// ── Charts
+const radarChart=ref(null), posChart=ref(null);
+const co2TrendChart=ref(null), scopeChart=ref(null);
+const energyTrendChart=ref(null), fuelChart=ref(null);
+const elecMixChart=ref(null), renewTrendChart=ref(null);
+const waterTrendChart=ref(null), waterComboChart=ref(null);
+const wasteRecovChart=ref(null), wasteVolChart=ref(null);
+
+const chartInstances = {};
+function destroyAll() { Object.values(chartInstances).forEach(c=>{ try{c.destroy()}catch(_){} }); }
+
+const OPT = (extra={}) => ({
+  responsive:true, maintainAspectRatio:false, animation:ANIMATION,
+  plugins:{ legend:{ display:true, position:"top", labels:{ color:"#64748B", boxWidth:9, font:{size:10}, padding:7 } }, tooltip:TOOLTIP },
+  scales:AXIS, interaction:{ mode:"index", intersect:false }, ...extra
+});
+
+function mk(key, el, type, datasets, extra={}) {
+  if (!el.value) return;
+  if (chartInstances[key]) { try{chartInstances[key].destroy()}catch(_){} }
+  chartInstances[key] = new Chart(el.value, { type, data:{ labels:YEAR_LABELS, datasets }, options:{ ...OPT(), ...extra } });
+}
+
+function secSeries(key, div=1) {
+  const raw = sectorData.value?.series?.[key];
+  if (!raw) return FALLBACK[key] || Array(YEARS.length).fill(null);
+  return raw.map(v=>v!=null?v/div:null);
+}
+
+function coLine(key, div=1) {
+  return YEARS.map(y => { const d=coTrend.value[y]; return d?.[key]!=null?d[key]/div:null; });
+}
+
+async function buildCharts() {
+  await nextTick();
+  const co = company.value || auth.companyName;
+  const coName = co?.split(" ")[0] || "You";
+
+  // sector series
+  const secCo2KPI  = secSeries("co2_kpi");
+  const secEnergyKPI = secSeries("energy_kpi");
+  const secWaterKPI= secSeries("water_kpi");
+  const secRenewPct= secSeries("renew_pct");
+  const secWasteR  = secSeries("waste_recov");
+  const secScope1  = secSeries("scope1", 1e6);
+  const secScope2  = secSeries("scope2", 1e6);
+  const fm = FALLBACK.fuel_mix;
+
+  // company trend series
+  const coCo2KPI    = coLine("co2_kpi");
+  const coEnergyKPI = coLine("energy_kpi");
+  const coWaterKPI  = coLine("water_kpi");
+  const coRenewPct  = coLine("renew_share_pct");
+  const coWasteR    = YEARS.map(y=>{ const d=coTrend.value[y]; return d?.waste_recovery_pct!=null?d.waste_recovery_pct*100:null; });
+  const coScope1    = coLine("total_co2_scope1", 1);
+  const coScope2    = coLine("total_co2_scope2", 1);
+  const coWaterM3   = coLine("water_kpi");
+  const coWasteTotal= YEARS.map(y=>coTrend.value[y]?.waste_total??null);
+  const coWasteRec  = YEARS.map(y=>coTrend.value[y]?.waste_recovery??null);
+  const coRenewGJ   = YEARS.map(y=>coTrend.value[y]?.renew_elec??null);
+  const coNonRenewGJ= YEARS.map(y=>coTrend.value[y]?.nonrenew_elec??null);
+
+  // IQR band helper
+  const iqrDatasets = (q25arr, q75arr, color) => [
+    { data:q75arr, fill:false, borderWidth:0, pointRadius:0, label:undefined, showInLegend:false },
+    { data:q25arr, fill:"-1", backgroundColor:color+"15", borderWidth:0, pointRadius:0, label:"Sector IQR", borderColor:"transparent" },
+  ];
+
+  // Radar
+  if (radarChart.value) {
+    const scores = bands.value.map(b=>b.posPct);
+    const secScores = bands.value.map(b=>{
+      const bnd=benchData.value?.bands?.[b.key]; if(!bnd) return 50;
+      const span=Math.max(bnd.q90-bnd.q10,0.001);
+      const raw=(bnd.median-bnd.q10)/span*100;
+      return b.lowerBetter ? 100-raw : raw;
+    });
+    const bLabels = bands.value.map(b=>b.name);
+    const r = (arr) => [...arr, arr[0]];
+    const ang = bLabels.map((_,i)=>2*Math.PI*i/bLabels.length - Math.PI/2);
+    const toXY = (scores) => scores.map((s,i)=>({ x: Math.cos(ang[i])*s, y: Math.sin(ang[i])*s }));
+
+    if (chartInstances.radar) { try{chartInstances.radar.destroy()}catch(_){} }
+    chartInstances.radar = new Chart(radarChart.value, {
+      type:"radar",
+      data:{ labels:bLabels, datasets:[
+        { label:coName, data:r(scores), borderColor:C.renew, backgroundColor:"rgba(22,163,74,.15)", pointRadius:5, borderWidth:2.5 },
+        { label:"Sector Median", data:r(secScores), borderColor:"#94A3B8", backgroundColor:"rgba(148,163,184,.08)", pointRadius:3, borderWidth:1.5, borderDash:[4,3] },
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, animation:ANIMATION,
+        plugins:{ legend:{ display:true, position:"bottom", labels:{ color:"#64748B", boxWidth:9, font:{size:10} } }, tooltip:TOOLTIP },
+        scales:{ r:{ min:0, max:100, ticks:{ backdropColor:"transparent", color:"#9CA3AF", font:{size:9}, stepSize:25 }, grid:{ color:"rgba(0,0,0,.06)" }, pointLabels:{ color:"#374151", font:{size:11} } } } }
+    });
+  }
+
+  // Position bar (horizontal)
+  if (posChart.value) {
+    if (chartInstances.pos) { try{chartInstances.pos.destroy()}catch(_){} }
+    chartInstances.pos = new Chart(posChart.value, {
+      type:"bar",
+      data:{ labels:bands.value.map(b=>b.name), datasets:[{ data:bands.value.map(b=>b.posPct), backgroundColor:bands.value.map(b=>b.color), borderRadius:4, borderWidth:0 }] },
+      options:{ indexAxis:"y", responsive:true, maintainAspectRatio:false, animation:ANIMATION,
+        plugins:{ legend:{display:false}, tooltip:TOOLTIP },
+        scales:{ x:{ min:0, max:100, grid:{color:AXIS.y.grid.color}, ticks:{...AXIS.x.ticks,callback:v=>v+"%"} }, y:{...AXIS.y,grid:{display:false}} } }
+    });
+  }
+
+  // CO2 trend vs sector
+  mk("co2trend", co2TrendChart, "line", [
+    ...iqrDatasets(secCo2KPI.map((_,i)=>secCo2KPI[i]*0.9), secCo2KPI.map(v=>v?v*1.1:null), C.co2),
+    { label:"Sector Median", data:secCo2KPI, borderColor:"#94A3B8", borderDash:[4,3], tension:0.4, pointRadius:2, borderWidth:1.5, backgroundColor:"transparent" },
+    { label:coName, data:coCo2KPI, borderColor:C.co2, tension:0.4, pointRadius:5, borderWidth:2.5, backgroundColor:"transparent" },
+  ]);
+
+  // Scope 1+2
+  mk("scope", scopeChart, "line", [
+    { label:"Scope 2", data:coScope2.some(v=>v!=null)?coScope2:secScope2, fill:true, backgroundColor:"rgba(71,85,105,.15)", borderColor:"#1D4ED8", tension:0.4, pointRadius:2, borderWidth:2 },
+    { label:"Scope 1", data:coScope1.some(v=>v!=null)?coScope1:secScope1, fill:true, backgroundColor:"rgba(71,85,105,.4)", borderColor:C.co2, tension:0.4, pointRadius:2, borderWidth:2 },
+  ]);
+
+  // Energy trend
+  mk("energytrend", energyTrendChart, "line", [
+    ...iqrDatasets(secEnergyKPI.map(v=>v?v*0.9:null), secEnergyKPI.map(v=>v?v*1.1:null), C.energy),
+    { label:"Sector Median", data:secEnergyKPI, borderColor:"#94A3B8", borderDash:[4,3], tension:0.4, pointRadius:2, borderWidth:1.5, backgroundColor:"transparent" },
+    { label:coName, data:coEnergyKPI, borderColor:C.energy, tension:0.4, pointRadius:5, borderWidth:2.5, backgroundColor:"transparent" },
+  ]);
+
+  // Fuel mix
+  const fuelColors={"Natural Gas":C.energy,"Electricity":"#3B82F6","Fuel Oil":"#EF4444","LPG":"#8B5CF6","Coal":"#6B7280","Other":"#D1D5DB"};
+  mk("fuel", fuelChart, "bar",
+    Object.entries(fm).map(([n,d])=>({ label:n, data:d, backgroundColor:fuelColors[n]||"#999", stack:"s", borderWidth:0 })),
+    { scales:{ x:{...AXIS.x,stacked:true}, y:{...AXIS.y,stacked:true} } });
+
+  // Electricity mix (renew vs non-renew)
+  const renGJ=coRenewGJ.every(v=>v==null)?YEARS.map((_,i)=>FALLBACK.renew_pct[i]):coRenewGJ;
+  const nonRenGJ=coNonRenewGJ.every(v=>v==null)?YEARS.map((_,i)=>100-FALLBACK.renew_pct[i]):coNonRenewGJ;
+  const totE = renGJ.map((v,i)=>Math.max((v||0)+(nonRenGJ[i]||0),1));
+  mk("elecmix", elecMixChart, "bar", [
+    { label:"Renewable", data:renGJ.map((v,i)=>v!=null?v/totE[i]*100:null), backgroundColor:C.renew, stack:"s", borderWidth:0 },
+    { label:"Non-Renewable", data:nonRenGJ.map((v,i)=>v!=null?v/totE[i]*100:null), backgroundColor:"#94A3B8", stack:"s", borderWidth:0 },
+  ], { scales:{ x:{...AXIS.x,stacked:true}, y:{...AXIS.y,stacked:true,ticks:{...AXIS.y.ticks,callback:v=>v+"%"}} } });
+
+  // Renew trend
+  mk("renewtrend", renewTrendChart, "line", [
+    ...iqrDatasets(secRenewPct.map(v=>v?v*0.7:null), secRenewPct.map(v=>v?v*1.3:null), C.renew),
+    { label:"Sector Median", data:secRenewPct, borderColor:"#94A3B8", borderDash:[4,3], tension:0.4, pointRadius:2, borderWidth:1.5, backgroundColor:"transparent" },
+    { label:coName, data:coRenewPct, borderColor:C.renew, tension:0.4, pointRadius:5, borderWidth:2.5, backgroundColor:"transparent" },
+  ], { scales:{...AXIS, y:{...AXIS.y,ticks:{...AXIS.y.ticks,callback:v=>v+"%"}}} });
+
+  // Water trend
+  mk("watertrend", waterTrendChart, "line", [
+    ...iqrDatasets(secWaterKPI.map(v=>v?v*0.85:null), secWaterKPI.map(v=>v?v*1.15:null), C.water),
+    { label:"Sector Median", data:secWaterKPI, borderColor:"#94A3B8", borderDash:[4,3], tension:0.4, pointRadius:2, borderWidth:1.5, backgroundColor:"transparent" },
+    { label:coName, data:coWaterKPI, borderColor:C.water, tension:0.4, pointRadius:5, borderWidth:2.5, backgroundColor:"transparent" },
+  ]);
+
+  // Water combo
+  mk("watercombo", waterComboChart, "bar", [
+    { label:"Withdrawals (M m³)", data:coWaterM3.every(v=>v==null)?FALLBACK.water:coWaterM3.map(v=>v?v/1e6:null), backgroundColor:C.water+"80", borderWidth:0, borderRadius:2 },
+  ]);
+
+  // Waste recovery trend
+  mk("wasterecov", wasteRecovChart, "line", [
+    ...iqrDatasets(secWasteR.map(v=>v?v*0.9:null), secWasteR.map(v=>v?v*1.05:null), C.waste),
+    { label:"Sector Median", data:secWasteR, borderColor:"#94A3B8", borderDash:[4,3], tension:0.4, pointRadius:2, borderWidth:1.5, backgroundColor:"transparent" },
+    { label:coName, data:coWasteR, borderColor:C.waste, tension:0.4, pointRadius:5, borderWidth:2.5, backgroundColor:"transparent" },
+    { label:"Target 90%", data:YEARS.map(()=>90), borderColor:C.renew, borderDash:[6,3], pointRadius:0, borderWidth:1.5, backgroundColor:"transparent" },
+  ], { scales:{...AXIS, y:{...AXIS.y,ticks:{...AXIS.y.ticks,callback:v=>v+"%"}}} });
+
+  // Waste volumes
+  mk("wasteVol", wasteVolChart, "bar", [
+    { label:"Total Waste", data:coWasteTotal.every(v=>v==null)?YEARS.map(()=>335000):coWasteTotal, backgroundColor:"#E2E8F0", borderWidth:0, borderRadius:2 },
+    { label:"Recovered",   data:coWasteRec.every(v=>v==null)?YEARS.map(()=>285000):coWasteRec, backgroundColor:C.waste, borderWidth:0, borderRadius:2 },
+  ], { scales:{...AXIS, y:{...AXIS.y,ticks:{...AXIS.y.ticks,callback:v=>(v/1000).toFixed(0)+"k"}}} });
+}
+
+async function loadData() {
+  const co = company.value || auth.companyName;
+  if (!co) return;
+  loading.value = true;
   try {
-    bench.value = await api.getBenchmarks({ company_id: selCompany.value, year: selYear.value })
-    if (bench.value?.available_years) years.value = [...bench.value.available_years].reverse()
-  } catch (e) { console.error(e) }
+    const [bench, analytics, coData] = await Promise.all([
+      api.getBenchmarks(selYear.value, co),
+      api.getAnalytics({ year_from:2009, year_to:2023, company_id:co }),
+      api.getCompanyData(co),
+    ]);
+    benchData.value  = bench;
+    sectorData.value = analytics;
+
+    // Build coTrend from all years
+    if (coData?.summary) {
+      availableYears.value = coData.years?.slice().sort((a,b)=>b-a) || [];
+      if (availableYears.value.length && !availableYears.value.includes(selYear.value))
+        selYear.value = availableYears.value[0];
+
+      const trend = {};
+      for (const s of coData.summary) {
+        if (s.kpis) {
+          const raw = await api.getCompanyData(co, s.year).then(r=>r.raw||{}).catch(()=>({}));
+          trend[s.year] = { ...s.kpis,
+            waste_total:    raw.waste_total,
+            waste_recovery: raw.waste_recovery,
+            renew_elec:     raw.renew_elec_purchased,
+            nonrenew_elec:  raw.nonrenew_elec_purchased,
+          };
+        }
+      }
+      coTrend.value = trend;
+    }
+    await buildCharts();
+  } catch(e) {
+    console.error("Benchmarking:", e);
+    await buildCharts();
+  }
+  loading.value = false;
+}
+
+async function loadCompanies() {
+  try {
+    const res = await api.getCompanies();
+    companies.value = Array.isArray(res) ? res : (res?.companies || []);
+    if (!company.value && companies.value.length) company.value = companies.value[0];
+  } catch(_) {}
 }
 
 onMounted(async () => {
-  if (isDss.value) {
-    const data = await api.getCompanies()
-    companies.value = data
-  }
-  await load()
-})
-
-// ── Data helpers ──────────────────────────────────────────────────────────────
-const b = computed(() => bench.value || {})
-const ys = computed(() => b.value.series_years || [])
-const co = computed(() => b.value.company_series || {})
-const sec= computed(() => b.value.sector_series || {})
-const q  = computed(() => b.value.quartiles || {})
-const myKpis = computed(() => b.value.company_kpis || {})
-const firstYear = computed(() => ys.value[0] || 2009)
-
-const sectorLayout = (title) => ({
-  yaxis: { title: { text: '' } },
-  hovermode: 'x unified',
-  title: { text: title, font: { size: 13 } }
-})
-
-// ── KPI chips ─────────────────────────────────────────────────────────────────
-const KPI_DEFS = [
-  { key: 'co2_kpi',             label: 'CO₂ INTENSITY',    unit: 'T.CO₂/T',  color: CAT_CO2,   dp: 3, lowerBetter: true },
-  { key: 'energy_kpi',          label: 'ENERGY INTENSITY', unit: 'GJ/T',      color: CAT_ENERGY,dp: 2, lowerBetter: true },
-  { key: 'water_kpi',           label: 'WATER INTENSITY',  unit: 'm³/T',      color: CAT_WATER, dp: 2, lowerBetter: true },
-  { key: 'renewable_share_pct', label: 'RENEWABLE ELEC.',  unit: '%',          color: CAT_RENEW, dp: 1, lowerBetter: false },
-  { key: 'waste_recovery_pct',  label: 'WASTE RECOVERY',   unit: '%',          color: CAT_WASTE, dp: 1, lowerBetter: false },
-]
-const kpiChips = computed(() => KPI_DEFS.map(d => {
-  const val  = myKpis.value[d.key] || 0
-  const qd   = q.value[d.key] || {}
-  const lo   = qd.q10 || 0; const hi = qd.q90 || val * 1.5 || 1
-  const span = Math.abs(hi - lo) || 1
-  let pct = ((val - lo) / span) * 100
-  if (d.lowerBetter) pct = 100 - pct
-  return { ...d, value: val.toFixed(d.dp), pct: Math.max(0, Math.min(100, pct)) }
-}))
-
-// ── Radar chart ────────────────────────────────────────────────────────────────
-const radarTraces = computed(() => {
-  const dims = ['CO₂ Intensity','Energy Intensity','Water Intensity','Renewable Elec.','Waste Recovery']
-  const coScores = KPI_DEFS.map(d => {
-    const val = myKpis.value[d.key] || 0
-    const qd  = q.value[d.key] || {}
-    const lo  = qd.q10 || 0; const hi = qd.q90 || val * 1.5 || 1
-    const span= Math.abs(hi - lo) || 1
-    const s   = d.lowerBetter ? (hi - val) / span * 100 : (val - lo) / span * 100
-    return Math.max(0, Math.min(100, s))
-  })
-  const secScores = KPI_DEFS.map(() => 50)
-  return [
-    { type: 'scatterpolar', r: coScores, theta: dims, fill: 'toself',
-      name: selCompany.value?.split(' ')[0],
-      line: { color: GREEN, width: 2 }, fillcolor: 'rgba(22,163,74,0.15)', mode: 'lines+markers',
-      marker: { size: 5, color: GREEN } },
-    { type: 'scatterpolar', r: secScores, theta: dims, fill: 'none',
-      name: 'Sector Median',
-      line: { color: '#94A3B8', width: 1.5, dash: 'dot' }, mode: 'lines+markers',
-      marker: { size: 4, color: '#94A3B8', symbol: 'diamond' } },
-  ]
-})
-const radarLayout = computed(() => ({
-  polar: { radialaxis: { range: [0, 100], tickfont: { size: 9 } },
-           angularaxis: { tickfont: { size: 10 } } },
-  showlegend: true,
-}))
-
-// ── Dot-and-whisker chart ─────────────────────────────────────────────────────
-const whiskerTraces = computed(() => {
-  const traces = []
-  KPI_DEFS.forEach((d, idx) => {
-    const qd  = q.value[d.key] || {}
-    const val = myKpis.value[d.key] || 0
-    const label = d.label
-    const good  = (val <= (qd.median || 0) && d.lowerBetter) || (val >= (qd.median || 0) && !d.lowerBetter)
-    // Range band
-    traces.push({ type: 'scatter', x: [qd.q10, qd.q90], y: [label, label],
-      mode: 'lines', line: { color: '#E2E8F0', width: 8 }, showlegend: false, hoverinfo: 'skip' })
-    // IQR
-    traces.push({ type: 'scatter', x: [qd.q25, qd.q75], y: [label, label],
-      mode: 'lines', line: { color: d.color, width: 12, opacity: 0.25 }, showlegend: false, hoverinfo: 'skip' })
-    // Median
-    traces.push({ type: 'scatter', x: [qd.median], y: [label],
-      mode: 'markers', marker: { size: 10, color: '#64748B', symbol: 'line-ns' }, showlegend: false,
-      hovertemplate: `Median: ${(qd.median||0).toFixed(3)}<extra></extra>` })
-    // Company diamond
-    traces.push({ type: 'scatter', x: [val], y: [label],
-      mode: 'markers+text', text: [val.toFixed(2)],
-      textposition: 'top center', textfont: { size: 9, color: good ? GREEN : '#EF4444' },
-      marker: { size: 14, color: good ? GREEN : '#EF4444', symbol: 'diamond',
-                line: { color: 'white', width: 2 } },
-      showlegend: false,
-      hovertemplate: `${label}: ${val.toFixed(3)}<extra></extra>` })
-  })
-  return traces
-})
-const whiskerLayout = computed(() => ({
-  xaxis: { gridcolor: '#F1F5F9' }, yaxis: { gridcolor: '#F1F5F9' }, showlegend: false,
-}))
-
-// ── Sector trend with IQR band ───────────────────────────────────────────────
-function sectorBandTraces(field, color, name) {
-  return [
-    { type: 'scatter', name: 'Q3', x: ys.value, y: sec.value[field + '_q75'],
-      mode: 'lines', line: { color: 'rgba(0,0,0,0)' }, showlegend: false, hoverinfo: 'skip' },
-    { type: 'scatter', name: 'Sector IQR', x: ys.value, y: sec.value[field + '_q25'],
-      fill: 'tonexty', fillcolor: color + '22', mode: 'lines', line: { color: 'rgba(0,0,0,0)' },
-      hoverinfo: 'skip' },
-    { type: 'scatter', name: 'Sector Median', x: ys.value, y: sec.value[field + '_median'],
-      mode: 'lines', line: { color: '#94A3B8', width: 1.5, dash: 'dot' },
-      hovertemplate: '<b>%{x}</b><br>Median: %{y:.3f}<extra></extra>' },
-    { type: 'scatter', name: name, x: ys.value, y: co.value[field],
-      mode: 'lines+markers', connectgaps: false,
-      line: { color, width: 2.5 }, marker: { size: 5, color },
-      hovertemplate: `<b>%{x}</b><br>${name}: %{y:.3f}<extra></extra>` },
-  ]
-}
-
-const co2BenchTraces    = computed(() => sectorBandTraces('co2_kpi',             CAT_CO2,   'CO₂ Intensity'))
-const energyBenchTraces = computed(() => sectorBandTraces('energy_kpi',          CAT_ENERGY,'Energy Intensity'))
-const waterBenchTraces  = computed(() => sectorBandTraces('water_kpi',           CAT_WATER, 'Water Intensity'))
-const renewBenchTraces  = computed(() => sectorBandTraces('renewable_share_pct', CAT_RENEW, 'Renewable %'))
-const wasteBenchTraces  = computed(() => sectorBandTraces('waste_recovery_pct',  CAT_WASTE, 'Waste Recovery %'))
-
-const scopeAreaTraces = computed(() => [
-  { type: 'scatter', name: 'Scope 2', x: ys.value, y: co.value.scope2_co2_t,
-    stackgroup: 'sc', fillcolor: 'rgba(148,163,184,0.3)', mode: 'none' },
-  { type: 'scatter', name: 'Scope 1', x: ys.value, y: co.value.scope1_co2_t,
-    stackgroup: 'sc', fillcolor: 'rgba(71,85,105,0.5)',   mode: 'none' },
-])
-
-const fuelMixTraces = computed(() => [
-  { type: 'bar', name: 'Nat. Gas',      x: ys.value, y: co.value.nat_gas_gj,   marker: { color: CAT_ENERGY } },
-  { type: 'bar', name: 'Renew. Elec.',  x: ys.value, y: co.value.renew_elec_gj,marker: { color: GREEN } },
-  { type: 'bar', name: 'Diesel',        x: ys.value, y: co.value.diesel_gj,    marker: { color: '#78716C' } },
-  { type: 'bar', name: 'Coal',          x: ys.value, y: co.value.coal_gj,      marker: { color: '#475569' } },
-])
-
-const elecMixTraces = computed(() => [
-  { type: 'bar', name: 'Renewable',     x: ys.value,
-    y: (co.value.renewable_share_pct || []), marker: { color: GREEN } },
-  { type: 'bar', name: 'Non-Renewable', x: ys.value,
-    y: (co.value.renewable_share_pct || []).map(v => 100 - (v||0)), marker: { color: '#94A3B8' } },
-])
-
-const waterBarTraces = computed(() => [
-  { type: 'bar', name: 'Withdrawals (M m³)', x: ys.value,
-    y: (co.value.total_water_m3 || []).map(v => (v||0)/1e6), marker: { color: CAT_WATER } },
-])
-
-const wasteTotalTraces = computed(() => [
-  { type: 'bar', name: 'Total Waste',  x: ys.value, y: co.value.total_waste_t,    marker: { color: '#E2E8F0' } },
-  { type: 'bar', name: 'Recovered',   x: ys.value, y: co.value.waste_recovered_t, marker: { color: CAT_WASTE } },
-])
-
-// ── Advanced tab ──────────────────────────────────────────────────────────────
-const parisTraces = computed(() => {
-  const baseYr  = ys.value[0] || 2009
-  const baseVal = (co.value.co2_kpi || [])[0] || 0.7
-  const paris   = ys.value.map(y => +(baseVal * Math.pow(0.958, y - baseYr)).toFixed(4))
-  return [
-    { type: 'scatter', name: 'Actual intensity', x: ys.value, y: co.value.co2_kpi,
-      mode: 'lines+markers', line: { color: CAT_CO2, width: 2.5 }, marker: { size: 5 }, connectgaps: false },
-    { type: 'scatter', name: `Paris 4.2%/yr (from ${baseYr})`, x: ys.value, y: paris,
-      mode: 'lines', line: { color: GREEN, width: 1.5, dash: 'dot' } },
-  ]
-})
-const parisLayout = { yaxis: { title: { text: 'T.CO₂/T' } }, hovermode: 'x unified' }
-
-const decouplingTraces = computed(() => {
-  const co2arr = co.value.co2_kpi || []
-  const renarr = co.value.renewable_share_pct || []
-  const valid  = ys.value.filter((_, i) => co2arr[i] > 0 && renarr[i] > 0)
-  const n = valid.length
-  return [{
-    type: 'scatter', mode: 'lines+markers',
-    x: valid.map((y, i) => renarr[ys.value.indexOf(y)]),
-    y: valid.map((y) => co2arr[ys.value.indexOf(y)]),
-    marker: { size: 10, color: valid.map((_, i) => `rgba(22,163,74,${0.25 + 0.75*i/Math.max(n-1,1)})`),
-              line: { color: 'white', width: 1.5 }, symbol: 'circle' },
-    line: { color: '#E2E8F0', width: 1, dash: 'dot' },
-    text: valid.map(String), textposition: 'top center',
-    hovertemplate: '<b>%{text}</b><br>Renew: %{x:.1f}%<br>CO₂: %{y:.3f}<extra></extra>',
-    showlegend: false,
-  }]
-})
-const decouplingLayout = {
-  xaxis: { title: { text: 'Renewable Electricity (%)' } },
-  yaxis: { title: { text: 'CO₂ Intensity (T.CO₂/T)' } },
-}
-
-// ── KPI Scorecard ─────────────────────────────────────────────────────────────
-const scorecardRows = computed(() => KPI_DEFS.map(d => {
-  const val = myKpis.value[d.key] || 0
-  const qd  = q.value[d.key] || {}
-  const med = qd.median || 0
-  const good= d.lowerBetter ? val <= med : val >= med
-  return {
-    kpi: d.label.replace('_', ' '),
-    myVal:  val.toFixed(d.dp) + ' ' + d.unit,
-    q1:     qd.q25?.toFixed(d.dp) || '—',
-    median: qd.median?.toFixed(d.dp) || '—',
-    q3:     qd.q75?.toFixed(d.dp) || '—',
-    good,
-  }
-}))
-
-// ── Improvements ──────────────────────────────────────────────────────────────
-const improvements = computed(() => {
-  if (!co.value.co2_kpi?.length || co.value.co2_kpi.length < 2) return []
-  return KPI_DEFS.map(d => {
-    const arr   = co.value[d.key] || []
-    const first = arr[0] || 0; const last = arr[arr.length-1] || 0
-    const pct   = first !== 0 ? ((last-first)/Math.abs(first)*100) : 0
-    const good  = d.lowerBetter ? pct <= 0 : pct >= 0
-    return { kpi: d.label, value: `${pct.toFixed(1)}%`, good }
-  })
-})
-
-function downloadPdf() { alert('PDF generation — hook up to backend /api/reports/pdf') }
+  if (auth.isDSS) await loadCompanies();
+  else company.value = auth.companyName;
+  await loadData();
+});
+onUnmounted(destroyAll);
+watch([company, selYear], loadData);
 </script>

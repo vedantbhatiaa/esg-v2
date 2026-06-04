@@ -1,366 +1,306 @@
 <template>
-  <div class="tip-fade-in">
-
-    <!-- ── Page header ────────────────────────────────────────────────────── -->
+  <div>
+    <!-- Header -->
     <div class="flex items-start justify-between mb-4">
       <div>
-        <h1 class="text-[22px] font-extrabold text-[#0F172A] tracking-tight leading-none">
-          Welcome, {{ firstName }} 👋
-        </h1>
-        <p class="text-[12px] text-[#64748B] mt-1">
-          {{ auth.companyName }} · Your Performance Dashboard
-        </p>
+        <h2 class="text-xl font-bold text-gray-900">Welcome, {{ firstName }} 👋</h2>
+        <p class="text-sm text-gray-400 mt-0.5">{{ auth.companyName }} · Your Performance Dashboard</p>
       </div>
-      <div class="flex items-center gap-3">
-        <select v-model.number="selYear" @change="onYearChange"
-          class="h-9 px-3 border border-[#E2E8F0] rounded-lg text-[13px] font-semibold
-                 bg-white cursor-pointer focus:outline-none">
-          <option v-for="yr in availYears" :key="yr" :value="yr">{{ yr }}</option>
+      <div class="flex items-center gap-2">
+        <select v-model="selectedYear" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white">
+          <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
         </select>
-        <button @click="$router.push('/entry')"
-          class="h-9 px-4 bg-[#0A2240] text-white rounded-lg text-[12px] font-semibold
-                 hover:bg-[#1a3560] transition-colors">
+        <router-link to="/submit"
+          class="h-8 px-3 text-white rounded-lg text-sm font-medium flex items-center hover:opacity-90 transition-opacity no-underline"
+          style="background:#0A2240">
           📋 Submit Data
-        </button>
+        </router-link>
       </div>
     </div>
 
-    <!-- ── Submission status bar ─────────────────────────────────────────── -->
-    <div class="bg-white border border-[#E2E8F0] rounded-xl px-5 py-3 mb-4 flex items-center gap-4">
+    <!-- Submission status bar -->
+    <div class="bg-white border border-gray-100 rounded-xl px-5 py-3 mb-4 flex items-center gap-4">
       <div class="flex-1">
-        <div class="text-[11px] text-[#64748B] mb-1.5">{{ selYear }} Submission Status</div>
-        <div class="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-          <div class="h-full rounded-full transition-all duration-700"
-            :class="statusBarColor"
-            :style="{ width: statusPct + '%' }"></div>
+        <div class="text-xs text-gray-400 mb-1.5">{{ selectedYear }} Submission Status</div>
+        <div class="bg-gray-100 rounded h-1.5 overflow-hidden">
+          <div class="h-full rounded transition-all duration-700"
+            :style="{ width: statusPct + '%', background: statusColor }"></div>
         </div>
       </div>
-      <div class="text-[18px] font-bold" :class="statusNumColor">
-        {{ sectionsDone }}/6
-      </div>
-      <div class="text-[11px] text-[#64748B]">sections complete</div>
-      <div class="border-l border-[#E2E8F0] pl-4 text-[12px] font-semibold whitespace-nowrap"
-        :class="verifTextColor">
-        {{ verifIcon }} {{ verifLabel }}
+      <div class="text-lg font-bold" :style="{ color: statusColor }">{{ statusDone }}/6</div>
+      <div class="text-xs text-gray-400">sections complete</div>
+      <div class="border-l border-gray-200 pl-4 text-xs font-semibold whitespace-nowrap" :style="{ color: verifColor }">
+        {{ verifIcon }} {{ verifStatus }}
       </div>
     </div>
 
-    <!-- ── 8 KPI Cards ───────────────────────────────────────────────────── -->
+    <!-- 8 KPI cards (2 × 4) -->
     <div class="grid grid-cols-4 gap-3 mb-4">
-      <KpiCard v-for="k in kpiCards" :key="k.label" v-bind="k" />
+      <KPICard v-for="(card, i) in kpiCards" :key="card.label"
+        :label="card.label" :value="card.value" :unit="card.unit"
+        :delta="card.delta" :color="card.color" :delay="i * 60" />
     </div>
 
-    <!-- ── Chart tabs ────────────────────────────────────────────────────── -->
-    <div class="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
-      <div class="flex border-b border-[#E2E8F0]">
-        <button
-          v-for="tab in TABS"
-          :key="tab.id"
-          @click="activeTab = tab.id"
-          class="px-5 py-3 text-[12px] font-semibold transition-colors flex items-center gap-1.5"
-          :class="tabClass(tab.id)">
-          {{ tab.icon }} {{ tab.label }}
+    <!-- 4 chart tabs -->
+    <div class="bg-white border border-gray-100 rounded-xl overflow-hidden mb-4">
+      <div class="flex border-b border-gray-100 overflow-x-auto">
+        <button v-for="tab in tabs" :key="tab.id" @click="setTab(tab.id)"
+          class="px-4 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap"
+          :class="activeTab===tab.id ? 'border-navy text-navy font-semibold' : 'border-transparent text-gray-400 hover:text-gray-700'">
+          {{ tab.label }}
         </button>
       </div>
-
       <div class="p-4">
-        <!-- CO₂ Trend -->
-        <div v-if="activeTab === 'co2'">
-          <div class="text-[13px] font-semibold mb-3">
-            Total CO₂ Emissions (Scope 1 + 2) with Intensity
-          </div>
-          <PlotlyChart
-            :traces="co2Traces"
-            :layout="co2Layout"
-            :height="320"
-            :chartKey="'co2-' + selYear + '-' + dfVersion" />
-        </div>
-
-        <!-- Energy Mix -->
-        <div v-if="activeTab === 'energy'">
-          <div class="text-[13px] font-semibold mb-3">Energy Mix by Source (GJ)</div>
-          <PlotlyChart
-            :traces="energyTraces"
-            :layout="energyLayout"
-            :height="320"
-            :chartKey="'energy-' + selYear + '-' + dfVersion" />
-        </div>
-
-        <!-- Water -->
-        <div v-if="activeTab === 'water'">
-          <div class="text-[13px] font-semibold mb-3">Water Withdrawals &amp; Intensity</div>
-          <PlotlyChart
-            :traces="waterTraces"
-            :layout="waterLayout"
-            :height="320"
-            :chartKey="'water-' + selYear + '-' + dfVersion" />
-        </div>
-
-        <!-- Waste & Fuel -->
-        <div v-if="activeTab === 'waste'">
-          <div class="text-[13px] font-semibold mb-3">
-            Waste Recovery Rate &amp; Renewable Electricity
-          </div>
-          <PlotlyChart
-            :traces="wasteTraces"
-            :layout="wasteLayout"
-            :height="320"
-            :chartKey="'waste-' + selYear + '-' + dfVersion" />
-        </div>
+        <div v-show="activeTab==='co2'"    style="height:260px"><canvas ref="co2Chart"></canvas></div>
+        <div v-show="activeTab==='energy'" style="height:260px"><canvas ref="energyChart"></canvas></div>
+        <div v-show="activeTab==='water'"  style="height:260px"><canvas ref="waterChart"></canvas></div>
+        <div v-show="activeTab==='waste'"  style="height:260px"><canvas ref="wasteChart"></canvas></div>
       </div>
     </div>
 
-    <!-- ── Historical KPI Summary Table ─────────────────────────────────── -->
-    <div class="bg-white border border-[#E2E8F0] rounded-xl mt-4 overflow-hidden">
-      <div class="px-5 py-3 border-b border-[#E2E8F0]">
-        <div class="text-[13px] font-semibold">
-          Historical KPI Summary — {{ auth.companyName }}
-        </div>
+    <!-- Historical table -->
+    <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-50 text-sm font-semibold">
+        Historical KPI Summary — {{ auth.companyName }}
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-[12px]">
-          <thead>
-            <tr class="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-              <th class="px-4 py-2.5 text-left text-[10px] font-bold text-[#64748B] uppercase tracking-wider w-16">Year</th>
-              <th v-for="h in TABLE_HEADERS" :key="h"
-                class="px-3 py-2.5 text-right text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
-                {{ h }}
-              </th>
-            </tr>
-          </thead>
+        <table class="w-full text-xs border-collapse">
+          <thead><tr class="bg-gray-50">
+            <th v-for="col in tableHeaders" :key="col"
+              class="px-4 py-2.5 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+              {{ col }}
+            </th>
+          </tr></thead>
           <tbody>
-            <tr v-for="(row, i) in tableRows" :key="row.year"
-              class="border-t border-[#F1F5F9]"
-              :class="rowClass(row.year, i)">
-              <td class="px-4 py-2 font-semibold">{{ row.year }}</td>
-              <td class="px-3 py-2 text-right">{{ row.production }}</td>
-              <td class="px-3 py-2 text-right">{{ row.total_co2 }}</td>
-              <td class="px-3 py-2 text-right">{{ row.co2_kpi }}</td>
-              <td class="px-3 py-2 text-right">{{ row.energy_kpi }}</td>
-              <td class="px-3 py-2 text-right">{{ row.renew_pct }}</td>
-              <td class="px-3 py-2 text-right">{{ row.water_kpi }}</td>
-              <td class="px-3 py-2 text-right">{{ row.waste_pct }}</td>
+            <tr v-if="!tableRows.length">
+              <td :colspan="tableHeaders.length" class="px-5 py-6 text-center text-gray-400">
+                No historical data. Submit your first KPI report.
+              </td>
+            </tr>
+            <tr v-for="row in tableRows" :key="row.year"
+              class="border-b border-gray-50 last:border-none hover:bg-gray-50 transition-colors">
+              <td class="px-4 py-2.5 font-bold text-navy">{{ row.year }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.production }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.co2_total }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.co2_kpi }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.energy_kpi }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.renew_pct }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.water_kpi }}</td>
+              <td class="px-4 py-2.5 tabular-nums">{{ row.waste_rec }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth.js'
-import { useEsgStore }  from '@/stores/esg.js'
-import KpiCard     from '@/components/KPICard.vue'
-import PlotlyChart from '@/components/PlotlyChart.vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { Chart } from "chart.js";
+import KPICard from "@/components/KPICard.vue";
+import { useAuthStore } from "@/stores/auth.js";
+import api from "@/services/api.js";
+import { C, TOOLTIP, ANIMATION, AXIS, YEAR_LABELS, YEARS, FALLBACK, mergeSeries } from "@/composables/useCharts.js";
 
-const auth = useAuthStore()
-const esg  = useEsgStore()
+const auth = useAuthStore();
+const selectedYear   = ref(2023);
+const availableYears = ref([]);     // populated from API — not hardcoded
+const activeTab      = ref("co2");
+const companyKPIs    = ref(null);
+const companySeries  = ref({});
+const tableRows      = ref([]);
 
-const firstName = computed(() => (auth.companyName || 'User').split(' ')[0])
-const selYear   = ref(new Date().getFullYear() - 1)
-const activeTab = ref('co2')
-const dfVersion = computed(() => esg.dfVersion)
+const firstName = computed(() => (auth.userName || "").split(" ")[0] || "there");
 
-const TABS = [
-  { id: 'co2',    icon: '📈', label: 'CO₂ Trend' },
-  { id: 'energy', icon: '⚡', label: 'Energy Mix' },
-  { id: 'water',  icon: '💧', label: 'Water' },
-  { id: 'waste',  icon: '♻️', label: 'Waste & Fuel' },
-]
+const tabs = [
+  { id:"co2",    label:"📈 CO₂ Trend" },
+  { id:"energy", label:"⚡ Energy Mix" },
+  { id:"water",  label:"💧 Water" },
+  { id:"waste",  label:"♻ Waste & Fuel" },
+];
 
-const TABLE_HEADERS = [
-  'Production (MT)', 'CO₂ Total (T)', 'CO₂ Intensity',
-  'Energy KPI (GJ/T)', 'Renew. Elec. %', 'Water KPI (m³/T)', 'Waste Recovery %',
-]
+// ── Year options: use all YEARS as fallback, override with API data
+const yearOptions = computed(() => availableYears.value.length ? availableYears.value : YEARS.slice().reverse());
 
-// ── tab helper (avoids ternary inside :class attribute) ──────────────────────
-function tabClass(id) {
-  if (id === activeTab.value) {
-    return 'border-b-2 border-[#0A2240] text-[#0A2240]'
-  }
-  return 'text-[#64748B] hover:text-[#0F172A]'
-}
-
-function rowClass(year, i) {
-  if (year === selYear.value) return 'font-bold text-[#0A2240] bg-blue-50'
-  return i % 2 === 0 ? 'bg-white' : 'bg-[#FAFBFC]'
-}
-
-// ── Store-derived data ────────────────────────────────────────────────────────
-const charts      = computed(() => esg.homeCharts)
-const availYears  = computed(() => {
-  const yrs = esg.availableYears
-  return yrs.length ? [...yrs].reverse() : [selYear.value]
-})
-const kpis        = computed(() => esg.homeKpis)
-const yoy         = computed(() => esg.homeYoy)
-const status      = computed(() => esg.submissionStatus)
-const sectionsDone= computed(() => status.value.sections_done || 0)
-const statusPct   = computed(() => (sectionsDone.value / 6) * 100)
-
-const statusBarColor = computed(() => {
-  if (sectionsDone.value === 6) return 'bg-[#16A34A]'
-  if (sectionsDone.value >= 3)  return 'bg-amber-400'
-  return 'bg-red-400'
-})
-const statusNumColor = computed(() => {
-  if (sectionsDone.value === 6) return 'text-[#16A34A]'
-  if (sectionsDone.value >= 3)  return 'text-amber-500'
-  return 'text-red-500'
-})
-
-const verifStatus  = computed(() => status.value.verification || 'Pending')
-const verifIcon    = computed(() => {
-  const map = { Verified: '✓', Pending: '◉', Flagged: '⚑' }
-  return map[verifStatus.value] || '○'
-})
-const verifLabel   = computed(() => {
-  const map = { Verified: 'Verified by dss+', Pending: 'Pending Review', Flagged: 'Flagged' }
-  return map[verifStatus.value] || 'Not Submitted'
-})
-const verifTextColor = computed(() => {
-  const map = { Verified: 'text-[#16A34A]', Pending: 'text-amber-500', Flagged: 'text-red-500' }
-  return map[verifStatus.value] || 'text-[#94A3B8]'
-})
-
-// ── KPI formatting ────────────────────────────────────────────────────────────
-function fmtBig(v) {
-  if (!v) return '—'
-  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M'
-  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'k'
-  return String(v)
-}
-
-const CAT_CO2   = '#475569'
-const CAT_ENERGY= '#F59E0B'
-const CAT_WATER = '#0891B2'
-const CAT_RENEW = '#16A34A'
-const CAT_WASTE = '#7C3AED'
-const CAT_NAVY  = '#0A2240'
-const CAT_ISO   = '#E31E24'
-
+// ── KPI cards
 const kpiCards = computed(() => {
-  const k = kpis.value
-  const y = yoy.value
-  const co2AbsVal  = k.total_co2_t   ? fmtBig(k.total_co2_t) + ' T' : '—'
-  const co2KpiVal  = k.co2_kpi       ? k.co2_kpi.toFixed(3)          : '—'
-  const engVal     = k.energy_kpi    ? k.energy_kpi.toFixed(2)        : '—'
-  const renewVal   = k.renewable_share_pct ? k.renewable_share_pct.toFixed(1) + ' %' : '—'
-  const watKpiVal  = k.water_kpi     ? k.water_kpi.toFixed(2)         : '—'
-  const watAbsVal  = k.total_water_m3 ? fmtBig(k.total_water_m3) + ' m³' : '—'
-  const wasteVal   = k.waste_recovery_pct ? k.waste_recovery_pct.toFixed(1) + ' %' : '—'
-  const isoVal     = k.iso_certified_pct  ? k.iso_certified_pct.toFixed(0)  + ' %' : '—'
+  const k = companyKPIs.value;
+  const fmt = (v, d) => v != null && v > 0 ? Number(v).toFixed(d) : "—";
+  const delta = (cur, prev) => {
+    if (!prev || prev === 0 || !cur) return null;
+    const pct = ((cur - prev) / Math.abs(prev) * 100).toFixed(1);
+    return `${pct > 0 ? "+" : ""}${pct}%`;
+  };
 
+  if (!k) return [
+    { label:"CO₂ Intensity",   value:"—", unit:"T.CO₂/T",  delta:null, color:C.co2    },
+    { label:"Energy Intensity",value:"—", unit:"GJ/T",      delta:null, color:C.energy },
+    { label:"Water Intensity", value:"—", unit:"m³/T",      delta:null, color:C.water  },
+    { label:"Renewable Elec.", value:"—", unit:"%",         delta:null, color:C.renew  },
+    { label:"Total CO₂",       value:"—", unit:"T.CO₂",     delta:null, color:C.co2    },
+    { label:"Total Energy",    value:"—", unit:"GJ",        delta:null, color:C.navy   },
+    { label:"Waste Recovery",  value:"—", unit:"%",         delta:null, color:C.waste  },
+    { label:"ISO 14001",       value:"—", unit:"%",         delta:null, color:C.renew  },
+  ];
+  const p = k.prev_kpis;
   return [
-    { label: 'CO₂ Absolute',     value: co2AbsVal, delta: y.total_co2_t,        lowerBetter: true,  color: CAT_NAVY,   unit: 'T.CO₂' },
-    { label: 'CO₂ Intensity',    value: co2KpiVal, delta: y.co2_kpi,            lowerBetter: true,  color: CAT_CO2,    unit: 'T/T' },
-    { label: 'Energy Intensity', value: engVal,    delta: y.energy_kpi,         lowerBetter: true,  color: CAT_ENERGY, unit: 'GJ/T' },
-    { label: 'Renewable Share',  value: renewVal,  delta: y.renewable_share_pct,lowerBetter: false, color: CAT_RENEW,  unit: '%' },
-    { label: 'Water Intensity',  value: watKpiVal, delta: y.water_kpi,          lowerBetter: true,  color: CAT_WATER,  unit: 'm³/T' },
-    { label: 'Water Withdrawal', value: watAbsVal, delta: y.total_water_m3,     lowerBetter: true,  color: CAT_WATER,  unit: 'm³' },
-    { label: 'Waste Recovery',   value: wasteVal,  delta: y.waste_recovery_pct, lowerBetter: false, color: CAT_WASTE,  unit: '%' },
-    { label: 'ISO 14001',        value: isoVal,    delta: y.iso_certified_pct,  lowerBetter: false, color: CAT_ISO,    unit: '%' },
-  ]
-})
+    { label:"CO₂ Intensity",   value:fmt(k.co2_kpi,3),                                   unit:"T.CO₂/T",  delta:p?delta(k.co2_kpi,p.co2_kpi):null,       color:C.co2    },
+    { label:"Energy Intensity",value:fmt(k.energy_kpi,2),                                 unit:"GJ/T",     delta:p?delta(k.energy_kpi,p.energy_kpi):null,   color:C.energy },
+    { label:"Water Intensity", value:fmt(k.water_kpi,2),                                  unit:"m³/T",     delta:p?delta(k.water_kpi,p.water_kpi):null,     color:C.water  },
+    { label:"Renewable Elec.", value:k.renew_share_pct!=null?k.renew_share_pct.toFixed(1):"—", unit:"%", delta:null, color:C.renew },
+    { label:"Total CO₂",       value:k.total_co2?(k.total_co2/1e6).toFixed(2)+"M":"—",   unit:"T.CO₂",    delta:null,                                       color:C.co2    },
+    { label:"Total Energy",    value:k.total_energy?(k.total_energy/1e6).toFixed(1)+"M":"—", unit:"GJ",   delta:null,                                       color:C.navy   },
+    { label:"Waste Recovery",  value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):"—", unit:"%", delta:null, color:C.waste },
+    { label:"ISO 14001",       value:k.pct_certified?(k.pct_certified*100).toFixed(0):"—", unit:"%",      delta:null,                                       color:C.renew  },
+  ];
+});
 
-// ── Chart traces ──────────────────────────────────────────────────────────────
-const ys = computed(() => charts.value.years || [])
+// ── Submission status
+const statusDone  = computed(() => {
+  const k = companyKPIs.value;
+  if (!k) return 0;
+  return [k.co2_kpi, k.energy_kpi, k.water_kpi, k.renew_share_pct, k.waste_recovery_pct, k.pct_certified]
+    .filter(v => v != null && v > 0).length;
+});
+const statusPct   = computed(() => statusDone.value / 6 * 100);
+const statusColor = computed(() => statusPct.value===100?"#16A34A":statusPct.value>=50?"#F59E0B":"#DC2626");
+const verifStatus = ref("Not Submitted");
+const verifColor  = ref("#94A3B8");
+const verifIcon   = ref("○");
 
-const co2Traces = computed(() => [
-  { type: 'scatter', name: 'Scope 2', x: ys.value, y: charts.value.scope2_mt || [],
-    stackgroup: 'sc', fillcolor: 'rgba(148,163,184,0.35)', mode: 'none',
-    hovertemplate: '<b>%{x}</b><br>Scope 2: %{y:.2f} M T.CO₂<extra></extra>' },
-  { type: 'scatter', name: 'Scope 1', x: ys.value, y: charts.value.scope1_mt || [],
-    stackgroup: 'sc', fillcolor: 'rgba(71,85,105,0.5)', mode: 'none',
-    hovertemplate: '<b>%{x}</b><br>Scope 1: %{y:.2f} M T.CO₂<extra></extra>' },
-  { type: 'scatter', name: 'CO₂ Intensity', x: ys.value, y: charts.value.co2_kpi || [],
-    yaxis: 'y2', mode: 'lines+markers', connectgaps: false,
-    line: { color: '#C8102E', width: 2.5, dash: 'dot' },
-    marker: { size: 5, color: '#C8102E' },
-    hovertemplate: '<b>%{x}</b><br>Intensity: %{y:.3f}<extra></extra>' },
-])
-const co2Layout = computed(() => ({
-  yaxis:  { title: { text: 'M T.CO₂' } },
-  yaxis2: { title: { text: 'T.CO₂/T' }, overlaying: 'y', side: 'right' },
-  hovermode: 'x unified',
-}))
+const tableHeaders = ["Year","Production (MT)","CO₂ Total (T)","CO₂ Intensity","Energy KPI (GJ/T)","Renew. Elec. %","Water KPI (m³/T)","Waste Recovery %"];
 
-const energyTraces = computed(() => [
-  { type: 'bar', name: 'Renew. Elec.',     x: ys.value, y: charts.value.renew_elec_gj    || [], marker: { color: CAT_RENEW } },
-  { type: 'bar', name: 'Non-renew. Elec.', x: ys.value, y: charts.value.nonrenew_elec_gj || [], marker: { color: '#94A3B8' } },
-  { type: 'bar', name: 'Natural Gas',      x: ys.value, y: charts.value.nat_gas_gj       || [], marker: { color: CAT_ENERGY } },
-])
-const energyLayout = computed(() => ({
-  barmode: 'stack',
-  yaxis: { title: { text: 'GJ' }, tickformat: ',.0f' },
-  hovermode: 'x unified',
-}))
+// ── Charts
+const co2Chart = ref(null), energyChart = ref(null), waterChart = ref(null), wasteChart = ref(null);
+const charts = {};
 
-const waterTraces = computed(() => [
-  { type: 'bar', name: 'Total Withdrawals', x: ys.value, y: charts.value.water_m3 || [],
-    marker: { color: CAT_WATER },
-    hovertemplate: '<b>%{x}</b><br>%{y:,.0f} m³<extra></extra>' },
-  { type: 'scatter', name: 'Intensity (m³/T)', x: ys.value, y: charts.value.water_kpi || [],
-    yaxis: 'y2', mode: 'lines+markers', connectgaps: false,
-    line: { color: '#164E63', width: 2 }, marker: { size: 4, color: '#164E63' },
-    hovertemplate: '<b>%{x}</b><br>%{y:.2f} m³/T<extra></extra>' },
-])
-const waterLayout = computed(() => ({
-  yaxis:  { title: { text: 'm³' }, tickformat: ',.0f' },
-  yaxis2: { title: { text: 'm³/T' }, overlaying: 'y', side: 'right' },
-  hovermode: 'x unified',
-}))
+function destroyAll() { Object.values(charts).forEach(c => { try { c.destroy(); } catch(_) {} }); }
 
-const wasteTraces = computed(() => [
-  { type: 'bar', name: 'Waste Recovery %', x: ys.value, y: charts.value.waste_recovery_pct || [],
-    marker: { color: CAT_WASTE },
-    hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>' },
-  { type: 'scatter', name: 'Renewable Elec. %', x: ys.value, y: charts.value.renewable_pct || [],
-    yaxis: 'y2', mode: 'lines+markers', connectgaps: false,
-    line: { color: CAT_RENEW, width: 2, dash: 'dot' }, marker: { size: 4, color: CAT_RENEW },
-    hovertemplate: '<b>%{x}</b><br>%{y:.1f}%<extra></extra>' },
-])
-const wasteLayout = computed(() => ({
-  yaxis:  { title: { text: 'Waste Recovery (%)' }, range: [0, 100] },
-  yaxis2: { title: { text: 'Renewable Elec. (%)' }, overlaying: 'y', side: 'right' },
-  hovermode: 'x unified',
-}))
+const OPT = (stacked) => ({
+  responsive:true, maintainAspectRatio:false, animation:ANIMATION,
+  plugins:{ legend:{ display:true, position:"top", labels:{ color:"#64748B", boxWidth:9, font:{size:11}, padding:9 } }, tooltip:TOOLTIP },
+  scales: stacked
+    ? { x:{...AXIS.x, stacked:true}, y:{...AXIS.y, stacked:true} }
+    : AXIS,
+  interaction:{ mode:"index", intersect:false },
+});
 
-// ── Historical table ──────────────────────────────────────────────────────────
-const tableRows = computed(() => {
-  const series = charts.value.years || []
-  const last10 = series.slice(-10).reverse()
-  return last10.map(yr => {
-    const idx = series.indexOf(yr)
-    return {
-      year:       yr,
-      production: fmtBig(charts.value.production_t?.[idx]),
-      total_co2:  fmtBig(charts.value.total_co2_t?.[idx]),
-      co2_kpi:    (charts.value.co2_kpi?.[idx] ?? null)?.toFixed(3) ?? '—',
-      energy_kpi: (charts.value.energy_kpi?.[idx] ?? null)?.toFixed(2) ?? '—',
-      renew_pct:  charts.value.renewable_pct?.[idx] != null
-        ? charts.value.renewable_pct[idx].toFixed(1) + '%' : '—',
-      water_kpi:  (charts.value.water_kpi?.[idx] ?? null)?.toFixed(2) ?? '—',
-      waste_pct:  charts.value.waste_recovery_pct?.[idx] != null
-        ? charts.value.waste_recovery_pct[idx].toFixed(1) + '%' : '—',
+async function buildCharts() {
+  await nextTick();
+  destroyAll();
+
+  const s = companySeries.value;
+  const ys = availableYears.value.length ? availableYears.value.slice().sort((a,b)=>a-b) : YEARS;
+  const labels = ys.map(y => `'${String(y).slice(2)}`);
+
+  // helper: get company series for a key
+  const coSeries = (key) => ys.map(y => s[y]?.[key] ?? null);
+
+  if (co2Chart.value) {
+    const scope1 = coSeries("scope1"); const scope2 = coSeries("scope2");
+    const hasCo2 = scope1.some(v=>v!=null);
+    charts.co2 = new Chart(co2Chart.value, { type:"line", data:{ labels, datasets:[
+      { label:"Scope 1", data: hasCo2 ? scope1 : mergeSeries(null, FALLBACK.scope1),
+        borderColor:C.co2, backgroundColor:"rgba(71,85,105,.12)", fill:true, tension:0.4, pointRadius:3, borderWidth:2 },
+      { label:"Scope 2", data: hasCo2 ? scope2 : mergeSeries(null, FALLBACK.scope2),
+        borderColor:C.teal, backgroundColor:"rgba(8,145,178,.10)", fill:true, tension:0.4, pointRadius:3, borderWidth:2 },
+    ]}, options:OPT(false) });
+  }
+
+  if (energyChart.value) {
+    const fuelColors = {"Natural Gas":C.energy, "Electricity":"#3B82F6", "Fuel Oil":"#EF4444", "LPG":"#8B5CF6", "Coal":"#6B7280", "Other":"#D1D5DB"};
+    const fm = FALLBACK.fuel_mix;
+    charts.energy = new Chart(energyChart.value, { type:"bar", data:{ labels, datasets:
+      Object.entries(fm).map(([name,vals])=>({ label:name, data:vals, backgroundColor:fuelColors[name]||"#999", borderWidth:0 }))
+    }, options:{ ...OPT(true), plugins:{ legend:{ display:true, position:"top", labels:{ color:"#64748B", boxWidth:9, font:{size:11} } }, tooltip:TOOLTIP } } });
+  }
+
+  if (waterChart.value) {
+    const wm3 = coSeries("water_m3").map((v,i)=>v!=null?v/1e6:FALLBACK.water[i]);
+    charts.water = new Chart(waterChart.value, { type:"bar", data:{ labels, datasets:[
+      { label:"Withdrawals (M m³)", data:wm3, backgroundColor:C.teal+"80", borderColor:C.teal, borderWidth:1, borderRadius:3 }
+    ]}, options:OPT(false) });
+  }
+
+  if (wasteChart.value) {
+    const wr = coSeries("waste_pct").map((v,i)=>v!=null?v:FALLBACK.waste_recov[i]);
+    charts.waste = new Chart(wasteChart.value, { type:"line", data:{ labels, datasets:[
+      { label:"Recovery Rate (%)", data:wr, borderColor:C.waste, backgroundColor:"rgba(124,58,237,.08)", fill:true, tension:0.4, pointRadius:3, borderWidth:2.5 }
+    ]}, options:{ ...OPT(false), scales:{ ...AXIS, y:{ ...AXIS.y, ticks:{ ...AXIS.y.ticks, callback:v=>v+"%" } } } } });
+  }
+}
+
+function setTab(id) { activeTab.value = id; }
+
+async function loadData() {
+  try {
+    // Load company-specific data (all years summary)
+    const cd = await api.getCompanyData(auth.companyName);
+    if (cd?.years) {
+      availableYears.value = cd.years.slice().sort((a,b)=>b-a);
+      if (!availableYears.value.includes(selectedYear.value))
+        selectedYear.value = availableYears.value[0] || 2023;
     }
-  })
-})
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────────
-async function load() {
-  await esg.fetchHomeData(auth.companyName, selYear.value)
-  if (esg.availableYears.length)
-    selYear.value = Math.max(...esg.availableYears)
+    if (cd?.summary) {
+      tableRows.value = cd.summary.slice().sort((a,b)=>b.year-a.year).slice(0,10).map(r => ({
+        year:       r.year,
+        production: r.kpis?.total_energy ? ((r.kpis.production||0)/1e6).toFixed(3) : "—",
+        co2_total:  r.kpis?.total_co2 ? Number(r.kpis.total_co2).toLocaleString() : "—",
+        co2_kpi:    r.kpis?.co2_kpi?.toFixed(3) ?? "—",
+        energy_kpi: r.kpis?.energy_kpi?.toFixed(2) ?? "—",
+        renew_pct:  r.kpis?.renew_share_pct?.toFixed(1)+"%" ?? "—",
+        water_kpi:  r.kpis?.water_kpi?.toFixed(2) ?? "—",
+        waste_rec:  r.kpis?.waste_recovery_pct ? (r.kpis.waste_recovery_pct*100).toFixed(1)+"%" : "—",
+      }));
+
+      // Build company_series for charts
+      const ser = {};
+      for (const s of cd.summary) {
+        const k = s.kpis || {};
+        ser[s.year] = {
+          scope1: k.total_co2_scope1, scope2: k.total_co2_scope2,
+          co2_kpi: k.co2_kpi, energy_kpi: k.energy_kpi, water_kpi: k.water_kpi,
+          water_m3: null, waste_pct: k.waste_recovery_pct!=null?k.waste_recovery_pct*100:null,
+          renew_pct: k.renew_share_pct,
+        };
+      }
+      companySeries.value = ser;
+    }
+
+    // Load selected year detail
+    await loadYearDetail();
+    await buildCharts();
+  } catch(e) {
+    console.error("HomeView loadData:", e);
+    await buildCharts();
+  }
 }
 
-function onYearChange() {
-  esg.fetchHomeData(auth.companyName, selYear.value)
+async function loadYearDetail() {
+  try {
+    const yr = await api.getCompanyData(auth.companyName, selectedYear.value);
+    if (yr?.kpis) {
+      companyKPIs.value = yr.kpis;
+      // Try to get raw for water m3
+      if (yr.raw) {
+        companySeries.value[selectedYear.value] = {
+          ...(companySeries.value[selectedYear.value]||{}),
+          water_m3: yr.raw.water_withdrawals,
+        };
+      }
+    }
+    if (yr?.verification_status) {
+      const vs = yr.verification_status;
+      verifStatus.value = vs==="Verified"?"Verified by dss+":vs==="Pending"?"Pending Review":vs==="Flagged"?"Flagged — see notes":"Not Submitted";
+      verifColor.value  = vs==="Verified"?"#16A34A":vs==="Flagged"?"#DC2626":"#F59E0B";
+      verifIcon.value   = vs==="Verified"?"✓":vs==="Flagged"?"⚑":"◉";
+    }
+  } catch(_) {}
 }
 
-onMounted(load)
-watch(() => auth.companyName, load)
+onMounted(loadData);
+onUnmounted(destroyAll);
+watch(selectedYear, async () => { await loadYearDetail(); });
 </script>
