@@ -1,6 +1,7 @@
 const express = require("express");
 const router  = express.Router();
 const ps      = require("../services/pythonService");
+
 router.get("/", async (req, res, next) => {
   try {
     const { data, error } = await ps.getMyRecords(req.query);
@@ -8,4 +9,5 @@ router.get("/", async (req, res, next) => {
     res.json(data);
   } catch (e) { next(e) }
 });
+
 module.exports = router;

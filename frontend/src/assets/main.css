@@ -1,158 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --navy:        #0A2240;
-  --navy-hover:  #0d2d56;
-  --green-esg:   #00916E;
-  --green-mid:   #16A34A;
-  --amber:       #F59E0B;
-  --red:         #DC2626;
-  --water:       #0891B2;
-  --waste:       #7C3AED;
-  --co2:         #475569;
-  --bg:          #F8FAFC;
-  --border:      #E2E8F0;
-  --text:        #0F172A;
-  --muted:       #64748B;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+*, *::before, *::after { box-sizing: border-box; }
 html, body, #app {
-  height: 100%;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #F8FAFC;
-  color: #0F172A;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  height: 100%; margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #F8FAFC; color: #0F172A;
 }
 
-/* Scrollbars */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-
-/* Page transitions */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
-.fade-enter-from, .fade-leave-to       { opacity: 0; }
-
-.slide-enter-active, .slide-leave-active { transition: transform 0.22s ease, opacity 0.22s ease; }
-.slide-enter-from  { transform: translateX(12px); opacity: 0; }
-.slide-leave-to    { transform: translateX(-8px); opacity: 0; }
-
-/* Table base */
-table { border-spacing: 0; }
-
-/* Animated KPI cards */
-@keyframes fadeUp {
+@keyframes tipFadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.anim-card { animation: fadeUp 0.35s ease forwards; }
-
-/* Section headers */
-.section-accent {
-  border-left: 3px solid currentColor;
-  padding: 2px 0 2px 12px;
-}
-
-/* Chart containers */
-.chart-container { position: relative; }
-
-/* Form inputs */
-.esg-input {
-  height: 36px;
-  border: 1.5px solid #E2E8F0;
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-family: inherit;
-  width: 100%;
-  background: #fff;
-  transition: border-color 0.15s;
-  outline: none;
-}
-.esg-input:focus { border-color: #0A2240; }
-
-/* Sidebar nav active */
-.nav-active {
-  background: rgba(22,163,74,0.85) !important;
-  color: #fff !important;
-  font-weight: 600;
-}
-
-/* Status chips */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-.chip-green  { background: #DCFCE7; color: #166534; }
-.chip-amber  { background: #FEF3C7; color: #92400E; }
-.chip-red    { background: #FEE2E2; color: #991B1B; }
-.chip-gray   { background: #F1F5F9; color: #475569; }
-.chip-blue   { background: #DBEAFE; color: #1E40AF; }
-
-/* Loading skeleton */
 @keyframes shimmer {
-  0%   { background-position: -1000px 0; }
-  100% { background-position: 1000px 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 200ms ease; }
+.fade-enter-from, .fade-leave-to       { opacity: 0; }
+
+.text-navy   { color: #0A2240; }
+.bg-navy     { background: #0A2240; }
+.border-navy { border-color: #0A2240; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+canvas { display: block; max-width: 100%; }
+
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(100,116,139,.35); border-radius: 99px; }
+
+tbody tr:hover { transition: background 120ms; }
+
+@media print {
+  aside, nav, header, button, select { display: none !important; }
+  main { overflow: visible !important; padding: 0 !important; }
+}
+
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 1000px 100%;
-  animation: shimmer 1.5s infinite;
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
   border-radius: 6px;
 }
 
-/* IQR band chart helpers */
-.band-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.band-label { font-size: 12px; font-weight: 500; color: #374151; width: 160px; flex-shrink: 0; }
-.band-track { flex: 1; height: 18px; border-radius: 4px; background: #F3F4F6; position: relative; overflow: hidden; }
-.band-pin { position: absolute; width: 3px; height: 26px; background: #0A2240; border-radius: 2px; top: -4px; transform: translateX(-50%); }
-
-/* Tipfade animation for components */
-@keyframes tipFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Better hover states for cards */
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(10,34,64,.10);
-}
-
-/* Radar chart improvement */
-canvas { display: block; }
-
-/* Print styles */
-@media print {
-  aside, nav { display: none !important; }
-  .no-print  { display: none !important; }
-  main { overflow: visible !important; }
-}
-
-/* Better table row hover */
-tbody tr:hover { transition: background-color 0.1s; }
-
-/* Status pills consistent */
-.status-pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-/* Ensure chart canvases fill containers */
-.chart-wrap { position: relative; width: 100%; }
+a, a:hover { text-decoration: none; }
+:focus-visible { outline: 2px solid #16A34A; outline-offset: 2px; }
