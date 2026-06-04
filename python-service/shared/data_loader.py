@@ -120,6 +120,16 @@ def _row_to_dict(row: dict) -> dict:
     # If it was stored as 0-1 fraction, convert
     if "iso_certified_pct" in out and out["iso_certified_pct"] <= 1.0:
         out["iso_certified_pct"] = round(out["iso_certified_pct"] * 100, 1)
+    # Normalize waste_recovery_pct to 0-100 scale
+    # "Recovery Rate" CSV column stores 0-1 fraction; "Waste_Recovery_Rate_%" stores 0-100
+    # Prefer waste_recovery_pct2 (0-100) if available and non-zero
+    if "waste_recovery_pct2" in out and out.get("waste_recovery_pct2", 0) > 0:
+        out["waste_recovery_pct"] = out["waste_recovery_pct2"]
+    elif "waste_recovery_pct" in out and out["waste_recovery_pct"] <= 1.0 and out["waste_recovery_pct"] > 0:
+        out["waste_recovery_pct"] = round(out["waste_recovery_pct"] * 100, 2)
+    # Normalize renewable_share_pct: always 0-100
+    if "renewable_share_pct" in out and out["renewable_share_pct"] <= 1.0 and out["renewable_share_pct"] > 0:
+        out["renewable_share_pct"] = round(out["renewable_share_pct"] * 100, 2)
     return out
 
 # ── Public API ─────────────────────────────────────────────────────────────────

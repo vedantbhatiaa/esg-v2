@@ -187,6 +187,11 @@ async function buildCharts() {
   const arr = (key, fallbackKey) => {
     const a = ch[key];
     if (a && a.some(v=>v!=null&&v>0)) return a;
+    // Support nested keys like "fuel_mix.Natural Gas"
+    if (fallbackKey && fallbackKey.includes(".")) {
+      const [obj, k] = fallbackKey.split(".");
+      return FALLBACK[obj]?.[k] || Array(ys.length).fill(0);
+    }
     return FALLBACK[fallbackKey] || Array(ys.length).fill(null);
   };
 

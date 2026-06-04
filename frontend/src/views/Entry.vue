@@ -335,11 +335,12 @@ async function submitData() {
       co2_scope2_steam:       formData.co2_scope2_steam,
       waste_total_t:          formData.waste_total,
       waste_recovered_t:      formData.waste_recovery,
+      waste_tires_t:          formData.waste_tires_mt,   // metric tonnes → calculations.py converts to GJ
     };
     const result = await api.submitData({
-      company: auth.companyName,
-      year:    selYear.value,
-      data:    mappedData,
+      company_id: auth.companyId,   // e.g. "verdatyres" — matches data_loader._COMPANIES
+      year:       selYear.value,
+      data:       mappedData,
     });
     saveOk.value  = true;
     saveMsg.value = `✅ ${result.message}`;

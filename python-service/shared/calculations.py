@@ -1,103 +1,146 @@
 """
-ESG KPI Calculations
-Extracted from original Streamlit app.py
-All formulas unchanged - this is the same logic, just importable.
+ESG KPI Calculations — TIP ESG Platform V2
+Exact port of formula_engine.py from the Streamlit app.
+Field names match what Entry.vue submits and data_loader.py stores.
 """
+
+# ── Emission factors (T.CO₂ per GJ LHV) — from formula_engine.py
+EF = {
+    "nat_gas_gj":        0.0561,   # Natural Gas
+    "coal_gj":           0.0961,   # Coal
+    "propane_gj":        0.0631,   # Propane
+    "fuel_oil_gj":       0.0774,   # Fuel Oil
+    "diesel_gj":         0.0741,   # Diesel
+    "petrol_gj":         0.0693,   # Petrol
+    "biomass_gj":        0.0,      # Biomass (biogenic, excluded)
+    "waste_tires_gj":    0.0475,   # Waste tires (already in GJ via HV)
+    "lpg_gj":            0.0561,   # LPG
+    "other_fuel_gj":     0.0719,   # Other
+}
+
+WASTE_TIRE_HV       = 36.23   # GJ per metric tonne of waste tires
+SCOPE2_ELEC_EF      = 0.125   # T.CO₂/GJ = 0.45 T.CO₂/MWh ÷ 3.6 (EU avg, from formula_engine.py)
+GJ_TO_MWH           = 1 / 3.6
+
+
+def _f(data: dict, key: str, default: float = 0.0) -> float:
+    """Safe float extraction."""
+    try:
+        return float(data.get(key, default) or default)
+    except (TypeError, ValueError):
+        return default
 
 
 def calculate_all_kpis(data: dict) -> dict:
     """
-    Master KPI calculation function.
-    Takes raw form data dict, returns all computed KPIs.
+    Master KPI calculation — exact port of formula_engine.calculate().
+    Accepts the field names used by Entry.vue form and data_loader._COL_MAP.
     """
-    prod = float(data.get("production_volume", 1))
+    production = max(_f(data, "production_t"), 1)
 
-    # ── Energy totals ──────────────────────────────────────────────
-    renew_elec   = float(data.get("renew_elec_purchased", 0))
-    nonrenew_elec = float(data.get("nonrenew_elec", 0))
-    self_gen     = float(data.get("self_gen_renew", 0))
-    steam        = float(data.get("purchased_steam", 0))
-    nat_gas      = float(data.get("nat_gas", 0))
-    lpg          = float(data.get("lpg", 0))
-    coal         = float(data.get("coal", 0))
-    fuel_oil     = float(data.get("fuel_oil", 0))
-    diesel       = float(data.get("diesel", 0))
-    petrol       = float(data.get("petrol", 0))
-    biomass      = float(data.get("biomass", 0))
-    waste_tires  = float(data.get("waste_tires", 0))
-    lpg2         = float(data.get("lpg2", 0))
-    other_fuel   = float(data.get("other_fuel", 0))
+    # ── Electricity
+    renew_elec    = _f(data, "renew_elec_gj")
+    nonrenew_elec = _f(data, "nonrenew_elec_gj")
+    self_gen      = _f(data, "self_gen_elec_gj")
+    total_elec    = renew_elec + nonrenew_elec + self_gen
 
-    total_elec      = renew_elec + nonrenew_elec + self_gen
-    total_fossil    = nat_gas + lpg + coal + fuel_oil + diesel + petrol + biomass + waste_tires + lpg2 + other_fuel
-    total_energy    = total_elec + steam + total_fossil
+    # ── Steam & sold
+    purchased_steam  = _f(data, "purchased_steam_gj")
+    sold_elec        = _f(data, "sold_elec_gj")
+    sold_steam       = _f(data, "sold_steam_gj")
 
-    # ── CO2 ────────────────────────────────────────────────────────
-    # Scope 1: from direct combustion (calculated from fuel emission factors)
-    # Scope 2: from purchased electricity + purchased steam
-    scope2_elec  = nonrenew_elec * 0.0000647  # tCO2/GJ avg grid factor
-    scope2_steam = float(data.get("co2_scope2_steam", 0))
-    scope2_total = scope2_elec + scope2_steam
+    # ── Fuels
+    nat_gas     = _f(data, "nat_gas_gj")
+    coal        = _f(data, "coal_gj")
+    propane     = _f(data, "propane_gj")
+    fuel_oil    = _f(data, "fuel_oil_gj")
+    diesel      = _f(data, "diesel_gj")
+    petrol      = _f(data, "petrol_gj")
+    biomass     = _f(data, "biomass_gj")
+    lpg         = _f(data, "lpg_gj")
+    other_fuel  = _f(data, "other_fuel_gj")
 
-    # Scope 1 from fuels (IPCC 2006 factors, GJ LHV basis)
-    scope1_nat_gas  = nat_gas  * 0.0000561
-    scope1_lpg      = (lpg + lpg2) * 0.0000631
-    scope1_coal     = coal     * 0.0000946
-    scope1_fuel_oil = fuel_oil * 0.0000772
-    scope1_diesel   = diesel   * 0.0000741
-    scope1_petrol   = petrol   * 0.0000693
-    scope1_total    = scope1_nat_gas + scope1_lpg + scope1_coal + scope1_fuel_oil + scope1_diesel + scope1_petrol
+    # Waste tires: input may be in metric tonnes → convert to GJ
+    waste_tires_t  = _f(data, "waste_tires_t")
+    waste_tires_gj = _f(data, "waste_tires_gj") or (waste_tires_t * WASTE_TIRE_HV)
 
-    total_co2 = scope1_total + scope2_total
+    # ── Total energy (GJ)
+    total_energy = (
+        total_elec + purchased_steam
+        + nat_gas + coal + propane + fuel_oil + diesel
+        + petrol + biomass + waste_tires_gj + lpg + other_fuel
+        - sold_elec - sold_steam
+    )
 
-    # ── Water ──────────────────────────────────────────────────────
-    water = float(data.get("water_withdrawals", 0))
+    # ── CO₂ Scope 1 (direct combustion)
+    scope1 = (
+        nat_gas   * EF["nat_gas_gj"]
+        + coal      * EF["coal_gj"]
+        + propane   * EF["propane_gj"]
+        + fuel_oil  * EF["fuel_oil_gj"]
+        + diesel    * EF["diesel_gj"]
+        + petrol    * EF["petrol_gj"]
+        + biomass   * EF["biomass_gj"]
+        + waste_tires_gj * EF["waste_tires_gj"]
+        + lpg       * EF["lpg_gj"]
+        + other_fuel* EF["other_fuel_gj"]
+    )
 
-    # ── Waste ──────────────────────────────────────────────────────
-    waste_total    = float(data.get("waste_total", 0))
-    waste_recovery = float(data.get("waste_recovery", 0))
+    # ── CO₂ Scope 2 (purchased energy)
+    # nonrenew_elec is in GJ; convert to MWh then × 0.45 T.CO₂/MWh
+    scope2_elec  = (nonrenew_elec * GJ_TO_MWH) * (SCOPE2_ELEC_EF / GJ_TO_MWH)  # = nonrenew_elec * 0.125
+    scope2_steam = _f(data, "co2_scope2_steam")   # company-provided T.CO₂
+    scope2       = scope2_elec + scope2_steam
+    total_co2    = scope1 + scope2
 
-    # ── ISO ────────────────────────────────────────────────────────
-    iso_total     = int(data.get("iso_total_sites", 0))
-    iso_certified = int(data.get("iso_certified_sites", 0))
+    # ── Water
+    water        = _f(data, "total_water_m3")
 
-    # ── KPI ratios ─────────────────────────────────────────────────
-    energy_kpi       = round(total_energy / prod, 2)      if prod > 0 else 0
-    co2_kpi          = round(total_co2 / prod, 4)         if prod > 0 else 0
-    water_kpi        = round(water / prod, 2)             if prod > 0 else 0
-    renewable_share  = round(renew_elec / total_elec * 100, 1) if total_elec > 0 else 0
-    waste_recovery_rate = round(waste_recovery / waste_total * 100, 1) if waste_total > 0 else 0
-    iso_pct          = round(iso_certified / iso_total * 100, 1) if iso_total > 0 else 0
+    # ── Waste
+    waste_total    = _f(data, "waste_total_t")
+    waste_recovery = _f(data, "waste_recovered_t")
+
+    # ── ISO 14001
+    iso_total     = int(_f(data, "total_sites"))
+    iso_certified = int(_f(data, "iso_sites"))
+
+    # ── KPI ratios
+    def sdiv(a, b): return round(a / b, 4) if b else 0.0
+
+    energy_kpi         = sdiv(total_energy, production)
+    co2_kpi            = sdiv(total_co2, production)
+    water_kpi          = sdiv(water, production)
+    renewable_share    = sdiv(renew_elec + self_gen, max(total_elec, 1)) * 100
+    waste_recovery_pct = sdiv(waste_recovery, waste_total) * 100 if waste_total > 0 else 0.0
+    iso_certified_pct  = sdiv(iso_certified, iso_total) * 100 if iso_total > 0 else 0.0
 
     return {
-        # Raw totals
-        "total_energy_gj":      round(total_energy, 0),
-        "total_elec_gj":        round(total_elec, 0),
-        "total_fossil_gj":      round(total_fossil, 0),
-        "total_co2_t":          round(total_co2, 0),
-        "scope1_co2_t":         round(scope1_total, 0),
-        "scope2_co2_t":         round(scope2_total, 0),
-        "total_water_m3":       round(water, 0),
-        "total_waste_t":        round(waste_total, 0),
-        "waste_recovered_t":    round(waste_recovery, 0),
-        "production_t":         round(prod, 0),
+        # Totals
+        "total_energy_gj":      round(total_energy, 2),
+        "total_elec_gj":        round(total_elec, 2),
+        "scope1_co2_t":         round(scope1, 2),
+        "scope2_co2_t":         round(scope2, 2),
+        "total_co2_t":          round(total_co2, 2),
+        "total_water_m3":       round(water, 2),
+        "waste_total_t":        round(waste_total, 2),
+        "waste_recovered_t":    round(waste_recovery, 2),
+        "production_t":         round(production, 2),
         # KPIs
-        "energy_kpi":           energy_kpi,
-        "co2_kpi":              co2_kpi,
-        "water_kpi":            water_kpi,
-        "renewable_share_pct":  renewable_share,
-        "waste_recovery_pct":   waste_recovery_rate,
-        "iso_certified_pct":    iso_pct,
+        "energy_kpi":           round(energy_kpi, 4),
+        "co2_kpi":              round(co2_kpi, 6),
+        "water_kpi":            round(water_kpi, 4),
+        "renewable_share_pct":  round(renewable_share, 2),
+        "waste_recovery_pct":   round(waste_recovery_pct, 2),
+        "iso_certified_pct":    round(iso_certified_pct, 2),
     }
 
 
 def calculate_yoy_change(current_val: float, prior_val: float) -> dict:
     """Returns YoY change % and direction."""
-    if prior_val == 0:
+    if not prior_val or prior_val == 0:
         return {"pct": None, "direction": "neutral"}
     pct = round(((current_val - prior_val) / abs(prior_val)) * 100, 1)
-    direction = "down" if pct < 0 else "up" if pct > 0 else "neutral"
-    return {"pct": pct, "direction": direction}
+    return {"pct": pct, "direction": "down" if pct < 0 else "up" if pct > 0 else "neutral"}
 
 
 def calculate_yoy_all(current_kpis: dict, prior_kpis: dict) -> dict:
@@ -107,10 +150,4 @@ def calculate_yoy_all(current_kpis: dict, prior_kpis: dict) -> dict:
         "renewable_share_pct", "waste_recovery_pct", "iso_certified_pct",
         "total_energy_gj", "total_co2_t", "total_water_m3",
     ]
-    result = {}
-    for f in fields:
-        result[f] = calculate_yoy_change(
-            current_kpis.get(f, 0),
-            prior_kpis.get(f, 0)
-        )
-    return result
+    return {f: calculate_yoy_change(current_kpis.get(f, 0), prior_kpis.get(f, 0)) for f in fields}

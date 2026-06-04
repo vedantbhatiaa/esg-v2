@@ -202,7 +202,7 @@ const improvData = computed(() => {
     { kpi:"Energy Intensity", ...pct(end.energy_kpi, base.energy_kpi)  },
     { kpi:"Water Intensity",  ...pct(end.water_kpi, base.water_kpi)    },
     { kpi:"Renewable Elec.",  ...pct(end.renewable_share_pct, base.renewable_share_pct, false) },
-    { kpi:"Waste Recovery",   ...pct(end.waste_recovery_pct, base.waste_recovery_pct, false) },
+    { kpi:"Waste Recovery",   ...pct(end.waste_pct??end.waste_recovery_pct, base.waste_pct??base.waste_recovery_pct, false) },
   ].filter(r=>r.val);
 });
 
@@ -259,7 +259,7 @@ async function buildCharts() {
   const coEnergyKPI = coLine("energy_kpi");
   const coWaterKPI  = coLine("water_kpi");
   const coRenewPct  = coLine("renew_share_pct");
-  const coWasteR    = YEARS.map(y=>{ const d=coTrend.value[y]; return d?.waste_recovery_pct!=null?d.waste_recovery_pct*100:null; });
+  const coWasteR    = YEARS.map(y=>{ const d=coTrend.value[y]; return d?.waste_pct!=null?d.waste_pct:(d?.waste_recovery_pct!=null?d.waste_recovery_pct:null); });
   const coScope1    = coLine("total_co2_scope1", 1);
   const coScope2    = coLine("total_co2_scope2", 1);
   const coWaterM3   = coLine("water_kpi");
