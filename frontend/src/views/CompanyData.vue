@@ -178,8 +178,8 @@ const kpiCards = computed(() => {
     { label:"Energy KPI",  value:(k.energy_kpi||0).toFixed(2),             unit:"GJ/T",    color:C.energy },
     { label:"Water KPI",   value:(k.water_kpi||0).toFixed(2),              unit:"m³/T",    color:C.water  },
     { label:"Renewable",   value:re.toFixed(1),                            unit:"%",       color:C.renew  },
-    { label:"Waste Rec.",  value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):"—", unit:"%", color:C.waste },
-    { label:"ISO 14001",   value:k.pct_certified?(k.pct_certified*100).toFixed(0):"—",    unit:"%",       color:C.navy  },
+    { label:"Waste Rec.",  value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):"—", unit:"%", color:C.waste },
+    { label:"ISO 14001",   value:k.iso_certified_pct?(k.iso_certified_pct*100).toFixed(0):"—",    unit:"%",       color:C.navy  },
   ];
 });
 
@@ -187,7 +187,7 @@ const TABLE_DEF = [
   { type:"section", label:"ISO 14001" },
   { type:"input",   label:"Total no. of sites",       unit:"no.",     key:"total_sites" },
   { type:"input",   label:"ISO 14001 certified sites",unit:"no.",     key:"iso_sites" },
-  { type:"calc",    label:"% certified sites",         unit:"%",       fn:(r,k)=>k?.pct_certified?(k.pct_certified*100).toFixed(1):"—" },
+  { type:"calc",    label:"% certified sites",         unit:"%",       fn:(r,k)=>k?.iso_certified_pct?(k.iso_certified_pct*100).toFixed(1):"—" },
   { type:"section", label:"Production" },
   { type:"input",   label:"Production",               unit:"metric T",key:"production", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"section", label:"Water" },
@@ -201,18 +201,18 @@ const TABLE_DEF = [
   { type:"input",   label:"Coal",                     unit:"GJ LHV",  key:"coal_sub", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"input",   label:"Diesel",                   unit:"GJ LHV",  key:"diesel", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"input",   label:"LPG",                      unit:"GJ LHV",  key:"lpg", fmt:(v)=>v?Number(v).toLocaleString():"—" },
-  { type:"calc",    label:"TOTAL ENERGY",             unit:"GJ",      fn:(_,k)=>k?.total_energy?Number(k.total_energy).toLocaleString():"—" },
+  { type:"calc",    label:"TOTAL ENERGY",             unit:"GJ",      fn:(_,k)=>k?.total_energy_gj?Number(k.total_energy_gj).toLocaleString():"—" },
   { type:"calc",    label:"Energy KPI",               unit:"GJ/T",    fn:(_,k)=>k?.energy_kpi?k.energy_kpi.toFixed(2):"—" },
   { type:"section", label:"CO₂ Emissions" },
   { type:"input",   label:"Scope 2 Steam",            unit:"T.CO₂",   key:"co2_scope2_steam", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"calc",    label:"Total CO₂ Scope 1",        unit:"T.CO₂",   fn:(_,k)=>k?.total_co2_scope1?Number(k.total_co2_scope1).toLocaleString():"—" },
   { type:"calc",    label:"Total CO₂ Scope 2",        unit:"T.CO₂",   fn:(_,k)=>k?.total_co2_scope2?Number(k.total_co2_scope2).toLocaleString():"—" },
-  { type:"calc",    label:"TOTAL CO₂",                unit:"T.CO₂",   fn:(_,k)=>k?.total_co2?Number(k.total_co2).toLocaleString():"—" },
+  { type:"calc",    label:"TOTAL CO₂",                unit:"T.CO₂",   fn:(_,k)=>k?.total_co2_t?Number(k.total_co2_t).toLocaleString():"—" },
   { type:"calc",    label:"CO₂ KPI",                  unit:"T.CO₂/T", fn:(_,k)=>k?.co2_kpi?k.co2_kpi.toFixed(3):"—" },
   { type:"section", label:"Waste" },
   { type:"input",   label:"Total waste",              unit:"metric T", key:"waste_total", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"input",   label:"Waste recovered",          unit:"metric T", key:"waste_recovery", fmt:(v)=>v?Number(v).toLocaleString():"—" },
-  { type:"calc",    label:"Recovery rate",            unit:"%",        fn:(_,k)=>k?.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1)+"%":"—" },
+  { type:"calc",    label:"Recovery rate",            unit:"%",        fn:(_,k)=>k?.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1)+"%":"—" },
 ];
 
 const tableRows = computed(() => {
@@ -277,7 +277,7 @@ async function loadData() {
   allData.value = {};
   try {
     // Load all years summary
-    const res = await api.getCompanyData(selCompany.value);
+    const res = await api.getHomeData(selCompany.value);
     if (res?.years) availYears.value = res.years.slice().sort((a,b)=>b-a);
     if (!availYears.value.includes(selYear.value) && availYears.value.length)
       selYear.value = availYears.value[0];
@@ -289,7 +289,7 @@ async function loadData() {
     }
 
     // Load raw for selected year
-    const yr = await api.getCompanyData(selCompany.value, selYear.value);
+    const yr = await api.getHomeData(selCompany.value, selYear.value);
     if (yr?.raw) {
       raw.value  = yr.raw;
       kpis.value = yr.kpis;
@@ -300,7 +300,7 @@ async function loadData() {
     for (const y of availYears.value) {
       if (y !== selYear.value && !allData.value[y]?.raw) {
         try {
-          const d = await api.getCompanyData(selCompany.value, y);
+          const d = await api.getHomeData(selCompany.value, y);
           if (d?.raw) allData.value[y] = { raw: d.raw, kpis: d.kpis };
         } catch(_) {}
       }

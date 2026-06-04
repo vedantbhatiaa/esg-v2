@@ -5,7 +5,7 @@
 
     <!-- Selectors -->
     <div class="flex gap-3 mb-4 flex-wrap items-center">
-      <select v-if="auth.isDSS" v-model="company" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white min-w-48">
+      <select v-if="auth.isDss" v-model="company" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white min-w-48">
         <option v-for="c in companies" :key="c" :value="c">{{ c }}</option>
       </select>
       <select v-model="selYear" class="h-8 border border-gray-200 rounded-lg px-2 text-sm bg-white">
@@ -134,7 +134,7 @@ import api from "@/services/api.js";
 import { C, TOOLTIP, ANIMATION, AXIS, YEARS, YEAR_LABELS, FALLBACK, mergeSeries } from "@/composables/useCharts.js";
 
 const auth = useAuthStore();
-const company = ref(auth.isDSS ? "" : auth.companyName);
+const company = ref(auth.isDss ? "" : auth.companyName);
 const selYear = ref(2023);
 const companies = ref([]);
 const availableYears = ref([]);
@@ -163,14 +163,14 @@ const bands = computed(() => {
   const cd = companyData.value;
   // get year-specific kpis
   const yr = selYear.value;
-  const kpis = coTrend.value[yr] || null;
+  const kpis = coTrend.value[yr] || bench?.my_kpis || null;
 
   const defs = [
     { key:"co2_kpi",    name:"CO₂ Intensity",  unit:"T.CO₂/T", lowerBetter:true,  color:C.co2,    val:kpis?.co2_kpi },
     { key:"energy_kpi", name:"Energy Intensity",unit:"GJ/T",    lowerBetter:true,  color:C.energy, val:kpis?.energy_kpi },
     { key:"water_kpi",  name:"Water Intensity", unit:"m³/T",    lowerBetter:true,  color:C.water,  val:kpis?.water_kpi },
-    { key:"renew_pct",  name:"Renewable Elec.", unit:"%",       lowerBetter:false, color:C.renew,  val:kpis?.renew_share_pct },
-    { key:"waste_pct",  name:"Waste Recovery",  unit:"%",       lowerBetter:false, color:C.waste,  val:kpis?.waste_recovery_pct!=null?kpis.waste_recovery_pct*100:null },
+    { key:"renew_pct",  name:"Renewable Elec.", unit:"%",       lowerBetter:false, color:C.renew,  val:kpis?.renewable_share_pct },
+    { key:"waste_pct",  name:"Waste Recovery",  unit:"%",       lowerBetter:false, color:C.waste,  val:kpis?.waste_recovery_pct },
   ];
 
   return defs.map(d => {
@@ -201,7 +201,7 @@ const improvData = computed(() => {
     { kpi:"CO₂ Intensity",    ...pct(end.co2_kpi, base.co2_kpi)        },
     { kpi:"Energy Intensity", ...pct(end.energy_kpi, base.energy_kpi)  },
     { kpi:"Water Intensity",  ...pct(end.water_kpi, base.water_kpi)    },
-    { kpi:"Renewable Elec.",  ...pct(end.renew_share_pct, base.renew_share_pct, false) },
+    { kpi:"Renewable Elec.",  ...pct(end.renewable_share_pct, base.renewable_share_pct, false) },
     { kpi:"Waste Recovery",   ...pct(end.waste_recovery_pct, base.waste_recovery_pct, false) },
   ].filter(r=>r.val);
 });
@@ -387,33 +387,19 @@ async function loadData() {
   if (!co) return;
   loading.value = true;
   try {
-    const [bench, analytics, coData] = await Promise.all([
+    const [bench, analytics] = await Promise.all([
       api.getBenchmarks(selYear.value, co),
       api.getAnalytics({ year_from:2009, year_to:2023, company_id:co }),
-      api.getCompanyData(co),
     ]);
     benchData.value  = bench;
     sectorData.value = analytics;
 
-    // Build coTrend from all years
-    if (coData?.summary) {
-      availableYears.value = coData.years?.slice().sort((a,b)=>b-a) || [];
+    // company_trend is pre-computed in get_benchmarks Python function
+    if (bench?.company_trend) {
+      availableYears.value = Object.keys(bench.company_trend).map(Number).sort((a,b)=>b-a);
       if (availableYears.value.length && !availableYears.value.includes(selYear.value))
         selYear.value = availableYears.value[0];
-
-      const trend = {};
-      for (const s of coData.summary) {
-        if (s.kpis) {
-          const raw = await api.getCompanyData(co, s.year).then(r=>r.raw||{}).catch(()=>({}));
-          trend[s.year] = { ...s.kpis,
-            waste_total:    raw.waste_total,
-            waste_recovery: raw.waste_recovery,
-            renew_elec:     raw.renew_elec_purchased,
-            nonrenew_elec:  raw.nonrenew_elec_purchased,
-          };
-        }
-      }
-      coTrend.value = trend;
+      coTrend.value = bench.company_trend;
     }
     await buildCharts();
   } catch(e) {
@@ -432,7 +418,7 @@ async function loadCompanies() {
 }
 
 onMounted(async () => {
-  if (auth.isDSS) await loadCompanies();
+  if (auth.isDss) await loadCompanies();
   else company.value = auth.companyName;
   await loadData();
 });

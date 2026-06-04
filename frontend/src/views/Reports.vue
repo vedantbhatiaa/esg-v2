@@ -150,27 +150,27 @@ function pct(cur, prev, down=true) {
 
 const headlines = computed(() => {
   const k=currentKPIs.value; const p=prevKPIs.value;
-  const re = k.renew_share_pct;
+  const re = k.renewable_share_pct;
   const d1=pct(k.co2_kpi,p.co2_kpi); const d2=pct(k.energy_kpi,p.energy_kpi);
-  const d3=re!=null&&p.renew_share_pct!=null?{val:`${(re-p.renew_share_pct).toFixed(1)}pp`,good:true}:null;
+  const d3=re!=null&&p.renewable_share_pct!=null?{val:`${(re-p.renewable_share_pct).toFixed(1)}pp`,good:true}:null;
   const d4=pct(k.waste_recovery_pct,p.waste_recovery_pct,false);
   return [
     { label:"CO₂ Intensity",    value:k.co2_kpi?.toFixed(3)??"—",              unit:"T/T",  delta:d1?.val??"—", good:d1?.good??true },
     { label:"Energy KPI",       value:k.energy_kpi?.toFixed(2)??"—",           unit:"GJ/T", delta:d2?.val??"—", good:d2?.good??true },
     { label:"Renew. Share",     value:re?.toFixed(1)??"—",                     unit:"%",    delta:d3?.val??"—", good:true },
-    { label:"Waste Recovery",   value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):"—", unit:"%", delta:d4?.val??"—", good:d4?.good??true },
+    { label:"Waste Recovery",   value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):"—", unit:"%", delta:d4?.val??"—", good:d4?.good??true },
   ];
 });
 
 const kpiCards = computed(() => {
   const k=currentKPIs.value; const p=prevKPIs.value;
   const d=(cur,prv,dn=true)=>{ const r=pct(cur,prv,dn); return r?{yoy:r.val,good:r.good}:{}; };
-  const re = k.renew_share_pct;
+  const re = k.renewable_share_pct;
   return [
     { label:"CO₂ Intensity",  value:k.co2_kpi?.toFixed(3)??"—",             unit:"T.CO₂/T", color:C.co2,    ...d(k.co2_kpi,p.co2_kpi)       },
-    { label:"Renewable Elec.",value:re?.toFixed(1)??"—",                    unit:"%",       color:C.renew,  ...d(re,p.renew_share_pct,false)  },
+    { label:"Renewable Elec.",value:re?.toFixed(1)??"—",                    unit:"%",       color:C.renew,  ...d(re,p.renewable_share_pct,false)  },
     { label:"Water KPI",      value:k.water_kpi?.toFixed(2)??"—",           unit:"m³/T",    color:C.water,  ...d(k.water_kpi,p.water_kpi)     },
-    { label:"Waste Recovery", value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):"—", unit:"%", color:C.waste, ...d(k.waste_recovery_pct,p.waste_recovery_pct,false) },
+    { label:"Waste Recovery", value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):"—", unit:"%", color:C.waste, ...d(k.waste_recovery_pct,p.waste_recovery_pct,false) },
     { label:"Energy KPI",     value:k.energy_kpi?.toFixed(2)??"—",          unit:"GJ/T",    color:C.energy, ...d(k.energy_kpi,p.energy_kpi)   },
     { label:"Production",     value:raw(selYear.value).production?(raw(selYear.value).production/1e6).toFixed(2):"—", unit:"M T", color:C.navy },
   ];
@@ -184,9 +184,9 @@ const tableRows = computed(() => histYears.value.slice().reverse().slice(0,10).m
   return {
     year:       y,
     co2_kpi:    co2?.toFixed(3)??"—",
-    renew_pct:  k.renew_share_pct?.toFixed(1)+"%"??"—",
+    renew_pct:  k.renewable_share_pct?.toFixed(1)+"%"??"—",
     water_kpi:  k.water_kpi?.toFixed(2)??"—",
-    waste_rec:  k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1)+"%":"—",
+    waste_rec:  k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1)+"%":"—",
     energy_kpi: k.energy_kpi?.toFixed(2)??"—",
     production: raw(y).production?(raw(y).production/1e6).toFixed(2):"—",
     trend:      good===null?"—":good?"▼ improving":"▲ watch",
@@ -215,7 +215,7 @@ async function buildCharts() {
   if (co2ChartRef.value) {
     if (charts.co2) { try{charts.co2.destroy()}catch(_){} }
     charts.co2 = new Chart(co2ChartRef.value, { type:"line", data:{ labels, datasets:[{
-      label:"Total CO₂", data:ys.map(y=>kpi(y).total_co2||null),
+      label:"Total CO₂", data:ys.map(y=>kpi(y).total_co2_t||null),
       borderColor:C.co2, backgroundColor:"rgba(71,85,105,.08)", fill:true, tension:0.4, pointRadius:3, borderWidth:2
     }]}, options:OPT() });
   }
@@ -254,7 +254,7 @@ async function buildCharts() {
 async function loadData() {
   loading.value = true;
   try {
-    const summary = await api.getCompanyData(auth.companyName);
+    const summary = await api.getHomeData(auth.companyName);
     if (summary?.years) {
       availableYears.value = summary.years.slice().sort((a,b)=>b-a);
       if (!availableYears.value.includes(selYear.value)) selYear.value = availableYears.value[0] || 2023;
@@ -262,7 +262,7 @@ async function loadData() {
     // Load raw+kpis for all years in parallel
     await Promise.all((summary?.years||[]).map(async y => {
       try {
-        const d = await api.getCompanyData(auth.companyName, y);
+        const d = await api.getHomeData(auth.companyName, y);
         if (d) histData.value[y] = { raw: d.raw||{}, kpis: d.kpis||{} };
       } catch(_) {}
     }));

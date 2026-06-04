@@ -150,9 +150,9 @@ const kpiCards = computed(() => {
     { label:"CO₂ KPI",    value:(k.co2_kpi||0).toFixed(3)+" T/T",    color:C.co2    },
     { label:"Energy KPI", value:(k.energy_kpi||0).toFixed(2)+" GJ/T", color:C.energy },
     { label:"Water KPI",  value:(k.water_kpi||0).toFixed(2)+" m³/T",  color:C.water  },
-    { label:"Renewable",  value:(k.renew_share_pct||0).toFixed(1)+"%",color:C.renew  },
-    { label:"Waste Rec.", value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1)+"%":"—", color:C.waste },
-    { label:"ISO 14001",  value:k.pct_certified?(k.pct_certified*100).toFixed(0)+"%":"—", color:C.navy },
+    { label:"Renewable",  value:(k.renewable_share_pct||0).toFixed(1)+"%",color:C.renew  },
+    { label:"Waste Rec.", value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1)+"%":"—", color:C.waste },
+    { label:"ISO 14001",  value:k.iso_certified_pct?(k.iso_certified_pct*100).toFixed(0)+"%":"—", color:C.navy },
   ];
 });
 
@@ -160,14 +160,14 @@ const sectionCompleteness = computed(() => {
   if (!kpis.value) return [];
   const k = kpis.value;
   return [
-    { label:"ISO 14001",        pct: k.pct_certified>0?100:0 },
-    { label:"Production",       pct: k.total_energy>0?100:0 },
+    { label:"ISO 14001",        pct: k.iso_certified_pct>0?100:0 },
+    { label:"Production",       pct: k.total_energy_gj>0?100:0 },
     { label:"Water",            pct: k.water_kpi>0?100:0 },
     { label:"Energy (Elec.)",   pct: k.total_electricity>0?100:0 },
     { label:"CO₂ Scope 1",      pct: k.total_co2_scope1>0?100:0 },
     { label:"CO₂ Scope 2",      pct: k.total_co2_scope2>0?100:0 },
     { label:"Waste",            pct: k.waste_recovery_pct>0?100:0 },
-    { label:"Renewable Elec.",  pct: k.renew_share_pct>0?100:0 },
+    { label:"Renewable Elec.",  pct: k.renewable_share_pct>0?100:0 },
     { label:"Pathway 3 (SBTi)", pct: 0 },
   ];
 });
@@ -178,8 +178,8 @@ function buildInsight() {
   const co2 = (k.co2_kpi||0).toFixed(3);
   const e   = (k.energy_kpi||0).toFixed(2);
   const w   = (k.water_kpi||0).toFixed(2);
-  const wr  = k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):0;
-  const re  = (k.renew_share_pct||0).toFixed(1);
+  const wr  = k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):0;
+  const re  = (k.renewable_share_pct||0).toFixed(1);
   const s   = score.value;
   insight.value = `${selCompany.value} ${selYear.value} submission has a readiness score of ${s}/100 (${scoreLabel.value}). ` +
     `Key KPIs: CO₂ intensity ${co2} T.CO₂/T, Energy intensity ${e} GJ/T, Water intensity ${w} m³/T. ` +
@@ -202,7 +202,7 @@ async function loadData() {
   loading.value = true;
   kpis.value = null; flags.value = []; insight.value = "";
   try {
-    const res = await api.getCompanyData(selCompany.value, selYear.value);
+    const res = await api.getHomeData(selCompany.value, selYear.value);
     if (res?.kpis)  kpis.value  = res.kpis;
     if (res?.flags) flags.value = res.flags;
     if (res?.years) availYears.value = res.years.slice().sort((a,b)=>b-a);

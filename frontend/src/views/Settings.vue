@@ -28,9 +28,9 @@
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Role</label>
-            <input :value="auth.isDSS ? 'dss+ Analyst (Internal)' : 'Client Company User'" class="w-full h-9 border border-gray-200 rounded-lg px-3 text-sm bg-gray-50 text-gray-400" readonly />
+            <input :value="auth.isDss ? 'dss+ Analyst (Internal)' : 'Client Company User'" class="w-full h-9 border border-gray-200 rounded-lg px-3 text-sm bg-gray-50 text-gray-400" readonly />
           </div>
-          <div v-if="!auth.isDSS">
+          <div v-if="!auth.isDss">
             <label class="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <input :value="auth.companyName" class="w-full h-9 border border-gray-200 rounded-lg px-3 text-sm bg-gray-50 text-gray-400" readonly />
           </div>

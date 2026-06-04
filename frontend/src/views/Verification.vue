@@ -119,9 +119,9 @@ const kpiCards = computed(() => {
     { label:"CO₂ KPI",    value:(k.co2_kpi||0).toFixed(3),             unit:"T.CO₂/T", color:C.co2    },
     { label:"Energy KPI", value:(k.energy_kpi||0).toFixed(2),           unit:"GJ/T",    color:C.energy },
     { label:"Water KPI",  value:(k.water_kpi||0).toFixed(2),            unit:"m³/T",    color:C.water  },
-    { label:"Renewable",  value:(k.renew_share_pct||0).toFixed(1),      unit:"%",       color:C.renew  },
-    { label:"Waste Rec.", value:k.waste_recovery_pct?(k.waste_recovery_pct*100).toFixed(1):"—", unit:"%", color:C.waste },
-    { label:"ISO 14001",  value:k.pct_certified?(k.pct_certified*100).toFixed(0):"—",  unit:"%",       color:C.navy  },
+    { label:"Renewable",  value:(k.renewable_share_pct||0).toFixed(1),      unit:"%",       color:C.renew  },
+    { label:"Waste Rec.", value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):"—", unit:"%", color:C.waste },
+    { label:"ISO 14001",  value:k.iso_certified_pct?(k.iso_certified_pct*100).toFixed(0):"—",  unit:"%",       color:C.navy  },
   ];
 });
 
@@ -174,7 +174,7 @@ async function loadData() {
   loading.value = true;
   kpis.value = null; flags.value = [];
   try {
-    const res = await api.getCompanyData(selCompany.value, selYear.value);
+    const res = await api.getHomeData(selCompany.value, selYear.value);
     if (res?.kpis) kpis.value = res.kpis;
     if (res?.flags) flags.value = res.flags;
     if (res?.years) availYears.value = res.years.slice().sort((a,b)=>b-a);

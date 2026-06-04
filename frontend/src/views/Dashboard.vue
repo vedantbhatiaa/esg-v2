@@ -198,7 +198,23 @@ async function loadData() {
     const params = { year_from:2009, year_to:2023, company_id:auth.companyName };
     const data = await api.getAnalytics(params);
     sectorData.value = data;
-    coSeries.value   = data?.company_series || {};
+    // Parse company series from analytics response
+    const rawSeries = data?.series || {};
+    const coSeriesMap = {};
+    const sYears = data?.years || [];
+    // analytics series are [{year,value}] format
+    for (const yr of sYears) {
+      coSeriesMap[yr] = {
+        co2_kpi:    rawSeries.co2_kpi?.find?.(r=>r.year===yr)?.value ?? null,
+        energy_kpi: rawSeries.energy_kpi?.find?.(r=>r.year===yr)?.value ?? null,
+        water_kpi:  rawSeries.water_kpi?.find?.(r=>r.year===yr)?.value ?? null,
+        renew_pct:  rawSeries.renewable_share_pct?.find?.(r=>r.year===yr)?.value ?? null,
+        scope1:     rawSeries.scope1_co2_t?.find?.(r=>r.year===yr)?.value ?? null,
+        scope2:     rawSeries.scope2_co2_t?.find?.(r=>r.year===yr)?.value ?? null,
+        total_co2:  rawSeries.total_co2_t?.find?.(r=>r.year===yr)?.value ?? null,
+      };
+    }
+    coSeries.value = coSeriesMap;
     await buildCharts();
   } catch(e) {
     console.error("Dashboard:", e);

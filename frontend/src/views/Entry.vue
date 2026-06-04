@@ -280,24 +280,21 @@ function fmtNum(n) { return n ? Math.round(n).toLocaleString() : "—"; }
 // ── Load existing data ─────────────────────────────────────────────────────
 async function loadYear(year) {
   try {
-    const data = await api.getCompanyData(auth.companyName, year);
-    if (data?.raw && Object.keys(data.raw).length > 0) {
-      form.value  = { ...defaultForm(), ...data.raw };
+    const data = await api.getHomeData(auth.companyName, year);
+    if (data?.kpis && (data.kpis.co2_kpi || data.kpis.energy_kpi)) {
+      // Pre-fill KPI hints from historical data (raw inputs not available from this endpoint)
       isNewYear.value = false;
-      // Set hints from prior year
-      if (data.kpis) {
-        hints.value = {
-          total_sites:   `Prior ${year-1}: ${data.raw.total_sites||'—'}`,
-          production:    `Prior ${year-1}: ${data.raw.production ? Number(data.raw.production).toLocaleString() : '—'}`,
-          water_withdrawals: `Prior ${year-1}: ${data.raw.water_withdrawals ? Number(data.raw.water_withdrawals).toLocaleString() : '—'}`,
-        };
-      }
+      hints.value = {
+        production:    `KPI: ${data.kpis.energy_kpi?.toFixed(2)||'—'} GJ/T last year`,
+        water_withdrawals: `KPI: ${data.kpis.water_kpi?.toFixed(2)||'—'} m³/T last year`,
+        nat_gas:       `CO₂ KPI: ${data.kpis.co2_kpi?.toFixed(3)||'—'} T/T last year`,
+      };
     } else {
       form.value  = defaultForm();
       isNewYear.value = true;
     }
-    if (data?.years) {
-      availableYears.value = data.years;
+    if (data?.available_years?.length) {
+      availableYears.value = data.available_years;
     }
   } catch (_) {
     form.value = defaultForm();
@@ -314,10 +311,35 @@ async function submitData() {
   saving.value = true;
   saveMsg.value = "";
   try {
+    // Map internal form field names → data_loader field names
+    const formData = form.value;
+    const mappedData = {
+      total_sites:            formData.total_sites,
+      iso_sites:              formData.iso_sites,
+      production_t:           formData.production,
+      total_water_m3:         formData.water_withdrawals,
+      renew_elec_gj:          formData.renew_elec_purchased,
+      nonrenew_elec_gj:       formData.nonrenew_elec_purchased,
+      self_gen_elec_gj:       formData.self_gen_elec,
+      purchased_steam_gj:     formData.purchased_steam,
+      sold_elec_gj:           formData.sold_electricity,
+      nat_gas_gj:             formData.nat_gas,
+      coal_gj:                formData.coal_sub,
+      propane_gj:             formData.propane,
+      fuel_oil_gj:            formData.fuel_oil_heavy_a,
+      diesel_gj:              formData.diesel,
+      petrol_gj:              formData.petrol,
+      biomass_gj:             formData.biomass,
+      lpg_gj:                 formData.lpg,
+      other_fuel_gj:          formData.other_fuels,
+      co2_scope2_steam:       formData.co2_scope2_steam,
+      waste_total_t:          formData.waste_total,
+      waste_recovered_t:      formData.waste_recovery,
+    };
     const result = await api.submitData({
       company: auth.companyName,
       year:    selYear.value,
-      data:    { ...form.value },
+      data:    mappedData,
     });
     saveOk.value  = true;
     saveMsg.value = `✅ ${result.message}`;
