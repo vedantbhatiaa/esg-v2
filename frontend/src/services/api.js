@@ -1,6 +1,5 @@
 /**
  * api.js — TIP ESG Platform V2
- * All calls use field names matching Streamlit TemplateInputs.
  */
 import axios from "axios";
 
@@ -19,27 +18,31 @@ http.interceptors.request.use((cfg) => {
 });
 
 export const api = {
-  // Auth
   login: (email, password) =>
     http.post("/auth/login", { email, password }).then(r => r.data),
 
-  // Home — returns { company, year, available_years, kpi_cards, yoy, yr_kpis, submission_status }
+  // Home page data — {kpi_cards, yoy, yr_kpis, available_years, submission_status}
   getHomeData: (company, year) =>
     http.get("/home", { params: { company, year } }).then(r => r.data),
 
-  // My Records — returns { rows, all_years, available_years, verification_status }
+  // My Records — {rows, all_years, available_years, verification_status}
   getMyRecords: (company, year) =>
     http.get("/records", { params: { company, year } }).then(r => r.data),
 
-  // Analytics — returns { years, series: { energy_kpi:[{year,value}], ... } }
+  // Company raw data — WITHOUT year: {years, summary:[{year,raw,kpis}]}
+  //                  — WITH year:    {year, raw, kpis, available_years}
+  getCompanyData: (company, year) =>
+    http.get("/company-data", { params: { company, year } }).then(r => r.data),
+
+  // Analytics — {years, series:{co2_kpi:[{year,value}], ...}}
   getAnalytics: (params) =>
     http.get("/analytics", { params }).then(r => r.data),
 
-  // Benchmarks — returns { year, bands, scorecard, my_kpis, company_trend }
+  // Benchmarks — {year, bands, scorecard, my_kpis, company_trend}
   getBenchmarks: (year, company) =>
     http.get("/benchmarks", { params: { year, company } }).then(r => r.data),
 
-  // Companies list
+  // Companies list — normalised to name strings
   getCompanies: (params) =>
     http.get("/companies", { params }).then(r => {
       const d = r.data;
@@ -48,11 +51,9 @@ export const api = {
       return d;
     }),
 
-  // Submit — data uses Streamlit field names (production, nat_gas, etc)
   submitData: (payload) =>
     http.post("/submissions", payload).then(r => r.data),
 
-  // Verification
   setVerification: (body) =>
     http.post("/verification", body).then(r => r.data),
 

@@ -356,7 +356,11 @@ async function loadData() {
   if (!auth.companyName) return;
   loading.value = true;
   try {
-    const data = await api.getHomeData(auth.companyName, selYear.value);
+    // dss+ Analyst has no company CSV — use first real company or selected company
+    const company = auth.isDss
+      ? (dssSelectedCompany.value || "VerdaTyres Corp")
+      : auth.companyName;
+    const data = await api.getHomeData(company, selYear.value);
     homeData.value   = data;
     yrKpis.value     = data?.yr_kpis || [];
     kpiCards_.value  = data?.kpi_cards || {};
@@ -388,7 +392,19 @@ async function loadData() {
   } finally { loading.value = false; }
 }
 
-onMounted(loadData);
+onMounted(async () => {
+  // Load company list for dss+ dropdown
+  if (auth.isDss) {
+    try {
+      const cos = await api.getCompanies();
+      if (Array.isArray(cos) && cos.length) {
+        dssCompanies.value = cos.filter(n => n !== "dss+ Analyst");
+        dssSelectedCompany.value = dssCompanies.value[0] || "VerdaTyres Corp";
+      }
+    } catch(_) {}
+  }
+  await loadData();
+});
 onUnmounted(destroyAll);
 watch(selYear, loadData);
 </script>

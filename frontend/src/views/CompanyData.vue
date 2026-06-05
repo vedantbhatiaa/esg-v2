@@ -179,7 +179,7 @@ const kpiCards = computed(() => {
     { label:"Water KPI",   value:(k.water_kpi||0).toFixed(2),              unit:"m³/T",    color:C.water  },
     { label:"Renewable",   value:re.toFixed(1),                            unit:"%",       color:C.renew  },
     { label:"Waste Rec.",  value:k.waste_recovery_pct?(k.waste_recovery_pct).toFixed(1):"—", unit:"%", color:C.waste },
-    { label:"ISO 14001",   value:k.iso_certified_pct?(k.iso_certified_pct*100).toFixed(0):"—",    unit:"%",       color:C.navy  },
+    { label:"ISO 14001",   value:k.iso_certified_pct?k.iso_certified_pct.toFixed(0):"—",    unit:"%",       color:C.navy  },
   ];
 });
 
@@ -187,7 +187,7 @@ const TABLE_DEF = [
   { type:"section", label:"ISO 14001" },
   { type:"input",   label:"Total no. of sites",       unit:"no.",     key:"total_sites" },
   { type:"input",   label:"ISO 14001 certified sites",unit:"no.",     key:"iso_sites" },
-  { type:"calc",    label:"% certified sites",         unit:"%",       fn:(r,k)=>k?.iso_certified_pct?(k.iso_certified_pct*100).toFixed(1):"—" },
+  { type:"calc",    label:"% certified sites",         unit:"%",       fn:(r,k)=>k?.iso_certified_pct?k.iso_certified_pct.toFixed(1)+"%":"—" },
   { type:"section", label:"Production" },
   { type:"input",   label:"Production",               unit:"metric T",key:"production", fmt:(v)=>v?Number(v).toLocaleString():"—" },
   { type:"section", label:"Water" },
@@ -276,35 +276,22 @@ async function loadData() {
   loading.value = true;
   allData.value = {};
   try {
-    // Load all years summary
-    const res = await api.getHomeData(selCompany.value);
-    if (res?.years) availYears.value = res.years.slice().sort((a,b)=>b-a);
-    if (!availYears.value.includes(selYear.value) && availYears.value.length)
-      selYear.value = availYears.value[0];
-
-    if (res?.summary) {
-      for (const s of res.summary) {
-        allData.value[s.year] = { raw: null, kpis: s.kpis };
+    // Use getCompanyData which returns all years with raw+kpis
+    const summary = await api.getCompanyData(selCompany.value);
+    if (summary?.years?.length) {
+      availYears.value = summary.years.slice().sort((a,b)=>b-a);
+      if (!availYears.value.includes(selYear.value) && availYears.value.length)
+        selYear.value = availYears.value[0];
+    }
+    // Populate allData from summary
+    if (summary?.summary) {
+      for (const s of summary.summary) {
+        allData.value[s.year] = { raw: s.raw || {}, kpis: s.kpis || {} };
       }
     }
-
-    // Load raw for selected year
-    const yr = await api.getHomeData(selCompany.value, selYear.value);
-    if (yr?.raw) {
-      raw.value  = yr.raw;
-      kpis.value = yr.kpis;
-      allData.value[selYear.value] = { raw: yr.raw, kpis: yr.kpis };
-    }
-
-    // Load raw for other years to fill table
-    for (const y of availYears.value) {
-      if (y !== selYear.value && !allData.value[y]?.raw) {
-        try {
-          const d = await api.getHomeData(selCompany.value, y);
-          if (d?.raw) allData.value[y] = { raw: d.raw, kpis: d.kpis };
-        } catch(_) {}
-      }
-    }
+    // Set current year raw+kpis
+    const cur = allData.value[selYear.value];
+    if (cur) { raw.value = cur.raw; kpis.value = cur.kpis; }
   } catch(e) { console.error("CompanyData load:", e); }
   finally { loading.value = false; }
 }

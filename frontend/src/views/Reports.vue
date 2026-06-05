@@ -244,7 +244,7 @@ async function buildCharts() {
   if (wasteChartRef.value) {
     if (charts.waste) { try{charts.waste.destroy()}catch(_){} }
     charts.waste = new Chart(wasteChartRef.value, { type:"line", data:{ labels, datasets:[
-      { label:"Recovery %", data:ys.map(y=>kpi(y).waste_recovery_pct!=null?kpi(y).waste_recovery_pct*100:null),
+      { label:"Recovery %", data:ys.map(y=>kpi(y).waste_recovery_pct!=null?kpi(y).waste_recovery_pct:null),
         borderColor:C.waste, backgroundColor:"rgba(124,58,237,.08)", fill:true, tension:0.4, pointRadius:3, borderWidth:2.5 },
       { label:"Target 90%", data:ys.map(()=>90), borderColor:C.renew, borderDash:[6,3], pointRadius:0, borderWidth:1.5, backgroundColor:"transparent" },
     ]}, options:{ ...OPT(), scales:{...AXIS, y:{...AXIS.y, ticks:{...AXIS.y.ticks, callback:v=>v+"%"}}} } });
@@ -254,18 +254,20 @@ async function buildCharts() {
 async function loadData() {
   loading.value = true;
   try {
-    const summary = await api.getHomeData(auth.companyName);
-    if (summary?.years) {
+    const company = auth.isDss ? (dssCompany.value || "VerdaTyres Corp") : auth.companyName;
+    // Use getCompanyData which returns {years, summary:[{year, raw, kpis}]}
+    const summary = await api.getCompanyData(company);
+    if (summary?.years?.length) {
       availableYears.value = summary.years.slice().sort((a,b)=>b-a);
-      if (!availableYears.value.includes(selYear.value)) selYear.value = availableYears.value[0] || 2023;
+      if (!availableYears.value.includes(selYear.value))
+        selYear.value = availableYears.value[0] || 2023;
     }
-    // Load raw+kpis for all years in parallel
-    await Promise.all((summary?.years||[]).map(async y => {
-      try {
-        const d = await api.getHomeData(auth.companyName, y);
-        if (d) histData.value[y] = { raw: d.raw||{}, kpis: d.kpis||{} };
-      } catch(_) {}
-    }));
+    // Populate histData from summary (already has raw + kpis per year)
+    if (summary?.summary) {
+      for (const s of summary.summary) {
+        histData.value[s.year] = { raw: s.raw || {}, kpis: s.kpis || {} };
+      }
+    }
     await buildCharts();
   } catch(e) { console.error("Reports:", e); }
   finally { loading.value = false; }
