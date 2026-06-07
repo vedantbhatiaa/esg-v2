@@ -79,7 +79,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     "total_co2_scope2":   k.get("scope2", 0),
                     "total_co2_t":        k.get("total_co2", 0),
                     "total_energy_gj":    k.get("total_energy", 0),
-                    "iso_certified_pct":  k.get("pct_certified", 0),
+                    "iso_certified_pct":  round(k.get("pct_certified", 0) * 100, 1),  # 0-100 scale
                     "renewable_share_pct":renew_pct,
                     "waste_recovery_pct": k.get("waste_recov_pct", 0),
                 },
